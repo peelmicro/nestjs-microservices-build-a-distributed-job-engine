@@ -15,7 +15,8 @@
         "development": {
           "args": ["node-env=development"]
         }
-      }
+      },
+      "dependsOn": ["generate-types"]
     },
     "serve": {
       "executor": "@nx/js:node",
@@ -37,6 +38,18 @@
     "test": {
       "options": {
         "passWithNoTests": true
+      }
+    },
+    "generate-types": {
+      "command": "prisma generate",
+      "options": {
+        "cwd": "apps/auth"
+      }
+    },
+    "migrate-prisma": {
+      "command": "prisma migrate dev",
+      "options": {
+        "cwd": "apps/auth"
       }
     }
   }
