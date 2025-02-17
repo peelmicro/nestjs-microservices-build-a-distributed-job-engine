@@ -960,7 +960,7 @@ juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-buil
 - We can ensure the databases are created by executing the following command:
 
 ```bash
-juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$docker exec -it nestjs-microservices-build-a-distributed-job-engine-postgres-1 psql -U postgres -c "\l"
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$docker docker exec -it nestjs-microservices-build-a-distributed-job-engine-postgres-1 psql -U postgres -c "\l+ auth"
 ```
 
 - We see the following output:
@@ -1211,6 +1211,9 @@ export class AppModule {}
 #### 2.5.1. Setting up GraphQL
 
 - We are going to use GraphQL to create the `users` endpoints.
+
+##### 2.5.1.1. Upgrading the dependencies
+
 - We need to ensure we have the latest version of `nestjs` installed.
 
 ```bash
@@ -1318,11 +1321,864 @@ added 1116 packages, and audited 1117 packages in 7s
 found 0 vulnerabilities
 ```
 
-- We need to install the `@nestjs/graphql` and `@nestjs/apollo` packages.
+##### 2.5.1.2. Installing the GraphQL dependencies
+
+- We need to install the `@nestjs/graphq`, `@nestjs/apollo`, `@apoll`/server` and `graphql` package.
 
 ```bash
-juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/auth/src/app$ npm install @nestjs/graphql @nestjs/apollo
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm install @nestjs/graphql @nestjs/apollo @apollo/server graphql --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nestjs/apollo@11.0.6
+npm warn Found: @nestjs/common@11.0.9
+npm warn node_modules/@nestjs/common
+npm warn   peer @nestjs/common@"^11.0.0" from @nestjs/core@11.0.9
+npm warn   node_modules/@nestjs/core
+npm warn     peer @nestjs/core@"^11.0.0" from @nestjs/platform-express@11.0.9
+npm warn     node_modules/@nestjs/platform-express
+npm warn     2 more (@nestjs/testing, the root project)
+npm warn   3 more (@nestjs/platform-express, @nestjs/testing, the root project)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer @nestjs/common@"^9.0.0" from @nestjs/apollo@11.0.6
+npm warn node_modules/@nestjs/apollo
+npm warn   @nestjs/apollo@"11" from the root project
+npm warn
+npm warn Conflicting peer dependency: @nestjs/common@9.4.3
+npm warn node_modules/@nestjs/common
+npm warn   peer @nestjs/common@"^9.0.0" from @nestjs/apollo@11.0.6
+npm warn   node_modules/@nestjs/apollo
+npm warn     @nestjs/apollo@"11" from the root project
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nestjs/apollo@11.0.6
+npm warn Found: @nestjs/core@11.0.9
+npm warn node_modules/@nestjs/core
+npm warn   peer @nestjs/core@"^11.0.0" from @nestjs/platform-express@11.0.9
+npm warn   node_modules/@nestjs/platform-express
+npm warn     peerOptional @nestjs/platform-express@"^11.0.0" from @nestjs/core@11.0.9
+npm warn     2 more (@nestjs/testing, the root project)
+npm warn   2 more (@nestjs/testing, the root project)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer @nestjs/core@"^9.3.8" from @nestjs/apollo@11.0.6
+npm warn node_modules/@nestjs/apollo
+npm warn   @nestjs/apollo@"11" from the root project
+npm warn
+npm warn Conflicting peer dependency: @nestjs/core@9.4.3
+npm warn node_modules/@nestjs/core
+npm warn   peer @nestjs/core@"^9.3.8" from @nestjs/apollo@11.0.6
+npm warn   node_modules/@nestjs/apollo
+npm warn     @nestjs/apollo@"11" from the root project
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nestjs/graphql@11.0.6
+npm warn Found: @nestjs/common@11.0.9
+npm warn node_modules/@nestjs/common
+npm warn   peer @nestjs/common@"^11.0.0" from @nestjs/core@11.0.9
+npm warn   node_modules/@nestjs/core
+npm warn     peer @nestjs/core@"^11.0.0" from @nestjs/platform-express@11.0.9
+npm warn     node_modules/@nestjs/platform-express
+npm warn     2 more (@nestjs/testing, the root project)
+npm warn   3 more (@nestjs/platform-express, @nestjs/testing, the root project)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer @nestjs/common@"^9.3.8" from @nestjs/graphql@11.0.6
+npm warn node_modules/@nestjs/graphql
+npm warn   @nestjs/graphql@"11" from the root project
+npm warn   1 more (@nestjs/apollo)
+npm warn
+npm warn Conflicting peer dependency: @nestjs/common@9.4.3
+npm warn node_modules/@nestjs/common
+npm warn   peer @nestjs/common@"^9.3.8" from @nestjs/graphql@11.0.6
+npm warn   node_modules/@nestjs/graphql
+npm warn     @nestjs/graphql@"11" from the root project
+npm warn     1 more (@nestjs/apollo)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nestjs/graphql@11.0.6
+npm warn Found: @nestjs/core@11.0.9
+npm warn node_modules/@nestjs/core
+npm warn   peer @nestjs/core@"^11.0.0" from @nestjs/platform-express@11.0.9
+npm warn   node_modules/@nestjs/platform-express
+npm warn     peerOptional @nestjs/platform-express@"^11.0.0" from @nestjs/core@11.0.9
+npm warn     2 more (@nestjs/testing, the root project)
+npm warn   2 more (@nestjs/testing, the root project)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer @nestjs/core@"^9.3.8" from @nestjs/graphql@11.0.6
+npm warn node_modules/@nestjs/graphql
+npm warn   @nestjs/graphql@"11" from the root project
+npm warn   1 more (@nestjs/apollo)
+npm warn
+npm warn Conflicting peer dependency: @nestjs/core@9.4.3
+npm warn node_modules/@nestjs/core
+npm warn   peer @nestjs/core@"^9.3.8" from @nestjs/graphql@11.0.6
+npm warn   node_modules/@nestjs/graphql
+npm warn     @nestjs/graphql@"11" from the root project
+npm warn     1 more (@nestjs/apollo)
+npm warn ERESOLVE overriding peer dependency
+npm warn ERESOLVE overriding peer dependency
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nestjs/graphql@11.0.6
+npm warn Found: reflect-metadata@0.2.2
+npm warn node_modules/reflect-metadata
+npm warn   peer reflect-metadata@"^0.1.12" from @nestjs/mapped-types@1.2.2
+npm warn   node_modules/@nestjs/graphql/node_modules/@nestjs/mapped-types
+npm warn     @nestjs/mapped-types@"1.2.2" from @nestjs/graphql@11.0.6
+npm warn     node_modules/@nestjs/graphql
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer reflect-metadata@"^0.1.13" from @nestjs/graphql@11.0.6
+npm warn node_modules/@nestjs/graphql
+npm warn   @nestjs/graphql@"11" from the root project
+npm warn   1 more (@nestjs/apollo)
+npm warn
+npm warn Conflicting peer dependency: reflect-metadata@0.1.14
+npm warn node_modules/reflect-metadata
+npm warn   peer reflect-metadata@"^0.1.13" from @nestjs/graphql@11.0.6
+npm warn   node_modules/@nestjs/graphql
+npm warn     @nestjs/graphql@"11" from the root project
+npm warn     1 more (@nestjs/apollo)
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @nx/eslint-plugin@20.4.4
+npm warn Found: eslint-config-prettier@10.0.1
+npm warn node_modules/eslint-config-prettier
+npm warn   dev eslint-config-prettier@"^10.0.1" from the root project
+npm warn
+npm warn Could not resolve dependency:
+npm warn peerOptional eslint-config-prettier@"^9.0.0" from @nx/eslint-plugin@20.4.4
+npm warn node_modules/@nx/eslint-plugin
+npm warn   dev @nx/eslint-plugin@"20.4.4" from the root project
+npm warn
+npm warn Conflicting peer dependency: eslint-config-prettier@9.1.0
+npm warn node_modules/eslint-config-prettier
+npm warn   peerOptional eslint-config-prettier@"^9.0.0" from @nx/eslint-plugin@20.4.4
+npm warn   node_modules/@nx/eslint-plugin
+npm warn     dev @nx/eslint-plugin@"20.4.4" from the root project
+npm warn deprecated lodash.omit@4.5.0: This package is deprecated. Use destructuring assignment syntax instead.
+npm warn deprecated @apollo/server-plugin-landing-page-graphql-playground@4.0.0: The use of GraphQL Playground in Apollo Server was supported in previous versions, but this is no longer the case as of December 31, 2022. This package exists for v4 migration purposes only. We do not intend to resolve security issues or other bugs with this package if they arise, so please migrate away from this to [Apollo Server's default Explorer](https://www.apollographql.com/docs/apollo-server/api/plugin/landing-pages) as soon as possible.
+npm warn deprecated subscriptions-transport-ws@0.11.0: The `subscriptions-transport-ws` package is no longer maintained. We recommend you use `graphql-ws` instead. For help migrating Apollo software to `graphql-ws`, see https://www.apollographql.com/docs/apollo-server/data/subscriptions/#switching-from-subscriptions-transport-ws    For general help using `graphql-ws`, see https://github.com/enisdenjo/graphql-ws/blob/master/README.md
+
+added 76 packages, removed 1 package, and audited 1193 packages in 10s
+
+193 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
 ```
 
+##### 2.5.1.3. Ensuring the `auth` microservice is still working
+
+- We need to ensure the `auth` microservice is still working.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve auth
+
+ NX   Running target serve for project auth and 2 tasks it depends on:
+
+————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run auth:generate-types
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.3.1) to ./../../node_modules/@prisma-clients/auth in 77ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
 
 
+> nx run auth:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 2.35 KiB [entry] [rendered]
+webpack compiled successfully (e9daf51baee2fec5)
+
+> nx run auth:serve:development
+
+
+> nx run auth:generate-types
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.3.1) to ./../../node_modules/@prisma-clients/auth in 53ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
+
+
+> nx run auth:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 2.35 KiB [entry] [rendered]
+webpack compiled successfully (e9daf51baee2fec5)
+
+————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project auth and 1 task it depends on (5s)
+
+Debugger listening on ws://localhost:9229/46dc945e-3d2a-4a7b-ab79-7f2e17d0c78f
+For help, see: https://nodejs.org/en/docs/inspector
+
+[Nest] 288596  - 16/02/2025, 12:49:11     LOG [NestFactory] Starting Nest application...
+[Nest] 288596  - 16/02/2025, 12:49:11     LOG [InstanceLoader] AppModule dependencies initialized +11ms
+[Nest] 288596  - 16/02/2025, 12:49:11     LOG [InstanceLoader] PrismaModule dependencies initialized +1ms
+[Nest] 288596  - 16/02/2025, 12:49:11     LOG [NestApplication] Nest application successfully started +71ms
+[Nest] 288596  - 16/02/2025, 12:49:11     LOG 🚀 Application is running on: http://localhost:3000/api
+```
+
+##### 2.5.1.4. Modifying the `app.module.ts` file to use GraphQL
+
+- We need to modify the `app.module.ts` file to use GraphQL.
+
+> apps/auth/src/app/app.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { PrismaModule } from './prisma/prisma.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+
+@Module({
+  imports: [
+    PrismaModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+    }),
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+#### 2.5.2. Creating the `User` GraphQL type
+
+##### 2.5.2.1. Creating a library where we are going to share all the `NestJS` code.
+
+- With `Nx` we can have `applications` and `libraries`.
+  - `Applications` are the main projects that we are going to deploy.
+  - `Libraries` are shared libraries that we can use across different applications.
+- We are going to create the `NestJS` library by executing the following command:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx g lib nestjs-utils
+```
+
+- We need to create the `User` GraphQL type.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx g library libs/nestjs
+✔ Which generator would you like to use? · @nx/nest:library
+
+ NX  Generating @nx/nest:library
+
+✔ Which linter would you like to use? · eslint
+✔ Which unit test runner would you like to use? · jest
+CREATE libs/nestjs/tsconfig.lib.json
+CREATE libs/nestjs/tsconfig.json
+CREATE libs/nestjs/src/index.ts
+CREATE libs/nestjs/README.md
+CREATE libs/nestjs/project.json
+CREATE libs/nestjs/eslint.config.mjs
+CREATE libs/nestjs/tsconfig.spec.json
+CREATE libs/nestjs/jest.config.ts
+UPDATE tsconfig.base.json
+CREATE libs/nestjs/src/lib/nestjs.module.ts
+
+ NX   👀 View Details of nestjs
+
+Run "nx show project nestjs" to view details about this project.
+
+
+ NX   👀 View Details of nestjs
+
+Run "nx show project nestjs" to view details about this project.
+```
+
+- The documents inside the `libs/nestjs` folder are the following:
+
+> libs/nestjs/src/lib/graphql/abstract.model.ts
+
+```ts
+import { Field, ID, ObjectType } from "@nestjs/graphql";
+
+@ObjectType({ isAbstract: true })
+export class AbstractModel {
+  @Field(() => ID)
+  id: number;
+}
+```
+
+> libs/nestjs/src/lib/graphql/index.ts
+
+```ts
+export * from './abstract.model';
+```
+
+> libs/nestjs/src/lib/index.ts
+
+```ts
+export * from './graphql';
+```
+
+> libs/nestjs/src/index.ts
+
+```ts
+export * from './lib';
+```
+
+##### 2.5.2.2. Creating the `User` GraphQL type in the `auth` application
+
+- We are going to create the `apps/auth/src/app/users/models` folder.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ mkdir apps/auth/src/app/users
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ mkdir apps/auth/src/app/users/models
+```
+
+- We need to create the `User` model.
+
+> apps/auth/src/app/users/models/user.model.ts
+
+```ts
+import { AbstractModel } from "@jobber/nestjs";
+import { Field, ObjectType } from "@nestjs/graphql";
+
+@ObjectType()
+export class User extends AbstractModel {
+  @Field(() => String)
+  email: string;
+}
+```
+
+##### 2.5.2.3. Creating the `User` GraphQL resolver
+
+- We need to create the `User` GraphQL resolver.
+- We are going to use `nx` to create the resolver.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/auth/src/app/users$ nx g resolver users
+✔ Which generator would you like to use? · @nx/nest:resolver
+
+ NX  Generating @nx/nest:resolver
+
+CREATE apps/auth/src/app/users/users.resolver.spec.ts
+CREATE apps/auth/src/app/users/users.resolver.ts
+UPDATE apps/auth/src/app/app.module.ts
+```
+
+- We are going to create the `Users` service as well.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/auth/src/app/users$ nx g service users
+✔ Which generator would you like to use? · @nx/nest:service
+
+ NX  Generating @nx/nest:service
+
+CREATE apps/auth/src/app/users/users.service.spec.ts
+CREATE apps/auth/src/app/users/users.service.ts
+UPDATE apps/auth/src/app/app.module.ts
+```
+
+- We need to create the `Users` module as well.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/auth/src/app/users$ nx g module users
+✔ Which generator would you like to use? · @nx/nest:module
+
+ NX  Generating @nx/nest:module
+
+CREATE apps/auth/src/app/users/users.module.ts
+UPDATE apps/auth/src/app/app.module.ts
+```
+
+- We are going to modify the `Users` resolver adding a `users` query juts to ensure everything is working.
+
+> apps/auth/src/app/users/users.resolver.ts
+
+```ts
+import { Query, Resolver } from '@nestjs/graphql';
+import { User } from './models/user.model';
+import { UsersService } from './users.service';
+
+@Resolver(() => User)
+export class UsersResolver {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Query(() => [User], { name: 'users' })
+  async getUsers() {}
+}
+```
+
+- We need to modify the `Users` module to add the `UsersResolver` and `UsersService`.
+
+> apps/auth/src/app/users/users.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { UsersResolver } from './users.resolver';
+import { UsersService } from './users.service';
+
+@Module({
+  providers: [UsersResolver, UsersService],
+})
+export class UsersModule {}
+```
+
+- We need to modify the `AppModule` to add the `UsersModule`.
+
+> apps/auth/src/app/app.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { PrismaModule } from './prisma/prisma.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { UsersModule } from './users/users.module';
+
+@Module({
+  imports: [
+    PrismaModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+    }),
+    UsersModule,
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+- We also need to modify the `main.ts` file to add the `json` middleware.
+
+> apps/auth/src/main.ts
+
+```ts
+/**
+ * This is not a production server yet!
+ * This is only a minimal backend to get started.
+ */
+
+import { Logger } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import * as express from 'express';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use(express.json());
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix);
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  Logger.log(
+    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`
+  );
+}
+
+bootstrap();
+```
+
+- Now if we start the `auth` microservice and we navigate to the `http://localhost:3000/graphql` we can access to the GraphQL playground.
+
+![GraphQL Playground](image008.png)
+
+##### 2.5.2.4. Adding the `class-validator` and `class-transformer` libraries to the `auth` application
+
+- We need to add the `class-validator` and `class-transformer` libraries to the `auth` application, so that we can validate the `User` input and transform the `User` output.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm install class-validator class-transformer --force
+npm warn using --force Recommended protections disabled.
+.
+added 5 packages, removed 1 package, and audited 1202 packages in 3s
+
+193 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+##### 2.5.2.5. Adding the `Inputs` GraphQL type to the `auth` application
+
+- We need to create the `CreateUserInput` that will be using the `class-validator` and `class-transformer` libraries.
+
+> apps/auth/src/app/users/dto/create-user.input.ts
+
+```ts
+import { Field, InputType } from "@nestjs/graphql";
+import { IsEmail, IsStrongPassword } from "class-validator";
+
+@InputType()
+export class CreateUserInput {
+  @Field()
+  @IsEmail()
+  email: string;
+
+  @Field()
+  @IsStrongPassword()
+  password: string;
+}
+```
+
+- We need to modify the `main.ts` file to use the `ValidationPipe` to validate any input.
+
+> apps/auth/src/main.ts
+
+```ts
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import * as express from 'express';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use(express.json());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+    })
+  );
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix);
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  Logger.log(
+    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`
+  );
+}
+
+bootstrap();
+```
+
+##### 2.5.2.6. Adding the `bcrypt` library to the `auth` application to encrypt the password
+
+- We need to add the `bcrypt` library to the `auth` application.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm install bcryptjs --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+.
+added 1 package, removed 1 package, and audited 1203 packages in 6s
+
+193 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm install @types/bcryptjs --save-dev --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+.
+added 1 package, and audited 1204 packages in 2s
+
+193 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+##### 2.5.2.7. Adding the proper `Queries` and `Mutations` to the `User` GraphQL type to the `auth` application
+
+- These are the final files for the `User` GraphQL type:
+
+> apps/auth/src/app/users/models/user.model.ts
+
+```ts
+import { AbstractModel } from "@jobber/nestjs";
+import { Field, ObjectType } from "@nestjs/graphql";
+
+@ObjectType()
+export class User extends AbstractModel {
+  @Field(() => String)
+  email: string;
+
+  @Field(() => Date)
+  updatedAt: Date;
+
+  @Field(() => Date)
+  createdAt: Date;
+}
+```
+
+> apps/auth/src/app/users/dto/upsert-user.input.ts
+
+```ts
+import { Field, InputType } from "@nestjs/graphql";
+import { IsEmail, IsOptional, IsStrongPassword } from "class-validator";
+
+@InputType()
+export class UpsertUserInput {
+  @Field()
+  @IsEmail()
+  email: string;
+
+  @Field()
+  @IsStrongPassword()
+  password: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsStrongPassword()
+  newPassword?: string;
+}
+```
+
+> apps/auth/src/app/users/users.service.ts
+
+```ts
+import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma-clients/auth';
+import { PrismaService } from '../prisma/prisma.service';
+import bcrypt from "bcryptjs";
+import crypto from 'crypto';
+
+bcrypt.setRandomFallback((len: number) => {
+  return Array.from(crypto.randomBytes(len));
+});
+
+@Injectable()
+export class UsersService {
+  constructor(private readonly prismaService: PrismaService) {}
+
+  private readonly logger = new Logger(UsersService.name);
+
+  async getUserByEmail(email: string) {
+    return this.prismaService.user.findUnique({
+      where: { email },
+    });
+  }
+
+  async getUser(id: number) {
+    return this.prismaService.user.findUnique({
+      where: { id },
+    });
+  }
+
+  async getUsers() {
+    return this.prismaService.user.findMany();
+  }
+
+  async upsertUser(data: Prisma.UserCreateInput & { newPassword?: string }) {
+    if (!data.password) {
+      throw new Error('Password is required');
+    }
+
+    const existingUser = await this.getUserByEmail(data.email);
+
+    if (existingUser) {
+      // Verify current password
+      if (!bcrypt.compareSync(data.password, existingUser.password)) {
+        throw new Error('Invalid current password');
+      }
+
+      // Fields to exclude from comparison
+      const excludedFields = ['id', 'email', 'createdAt', 'updatedAt', 'password', 'newPassword'];
+
+      // Prepare update data
+      const updateData: Prisma.UserUpdateInput & { newPassword?: string } = { ...data };
+      delete updateData.newPassword; // Remove newPassword from the data to update
+
+      // Handle password update if newPassword is provided
+      if (data.newPassword) {
+        const salt = bcrypt.genSaltSync(10);
+        updateData.password = bcrypt.hashSync(data.newPassword, salt);
+      } else {
+        delete updateData.password; // Don't update password if newPassword isn't provided
+      }
+
+      // Compare existing user with new data
+      const hasChanges = Object.keys(updateData).some(key => {
+        if (excludedFields.includes(key)) return false;
+        return updateData[key] !== existingUser[key];
+      });
+
+      if (!hasChanges && !data.newPassword) {
+        return existingUser;
+      }
+
+      updateData.updatedAt = new Date();
+
+      return this.prismaService.user.update({
+        where: { email: data.email },
+        data: updateData,
+      });
+    }
+
+    // Create new user (ignore newPassword for creation)
+    const salt = bcrypt.genSaltSync(10);
+    const newUserData = {
+      ...data,
+      password: bcrypt.hashSync(data.password, salt),
+      updatedAt: new Date(),
+    };
+    delete newUserData.newPassword;
+
+    return this.prismaService.user.create({
+      data: newUserData,
+    });
+  }
+}
+```
+
+> apps/auth/src/app/users/users.resolver.ts
+
+```ts
+import { Mutation, Args, Query, Resolver } from '@nestjs/graphql';
+import { User } from './models/user.model';
+import { UsersService } from './users.service';
+import { UpsertUserInput } from './dto/upsert-user.input';
+
+@Resolver(() => User)
+export class UsersResolver {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Mutation(() => User)
+  async upsertUser(@Args('upsertUserInput') upsertUserInput: UpsertUserInput) {
+    return this.usersService.upsertUser(upsertUserInput);
+  }
+
+  @Query(() => [User], { name: 'users' })
+  async getUsers() {
+    return this.usersService.getUsers();
+  }
+
+  @Query(() => User, { name: 'user' })
+  async getUser(@Args('id', { type: () => Number }) id: number) {
+    return this.usersService.getUser(id);
+  }
+
+  @Query(() => User, { name: 'userByEmail' })
+  async getUserByEmail(@Args('email', { type: () => String }) email: string) {
+    return this.usersService.getUserByEmail(email);
+  }
+}
+```
+
+##### 2.5.2.8. Adding the `http` requests document to the `Users` model
+
+- We need to add the `http` requests document to the `Users` model.
+
+> apps/auth/src/app/users/users.http
+
+```http
+
+### Get all users
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by email
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  userByEmail(email: "my-email2@msn.com")
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by id
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  user(id: 1)
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Create a user
+
+POST http://localhost:3000/graphql
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Update password for a user
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!",
+    newPassword: "MyPassword2!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```

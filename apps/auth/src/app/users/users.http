@@ -1,0 +1,84 @@
+
+### Get all users
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by email
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  userByEmail(email: "my-email2@msn.com")
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by id
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  user(id: 1)
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Create a user
+
+POST http://localhost:3000/graphql
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Update password for a user
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!",
+    newPassword: "MyPassword2!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
