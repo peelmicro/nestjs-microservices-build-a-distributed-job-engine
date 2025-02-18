@@ -18,8 +18,8 @@ export class UsersResolver {
   }
 
   @Query(() => User, { name: 'user' })
-  async getUser(@Args('id', { type: () => Number }) id: number) {
-    return this.usersService.getUser(id);
+  async getUserById(@Args('id', { type: () => Number }) id: number) {
+    return this.usersService.getUserById(id);
   }
 
   @Query(() => User, { name: 'userByEmail' })

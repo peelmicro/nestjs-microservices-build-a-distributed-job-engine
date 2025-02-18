@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma-clients/auth';
 import { PrismaService } from '../prisma/prisma.service';
-import bcrypt from "bcryptjs";
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
 bcrypt.setRandomFallback((len: number) => {
@@ -20,7 +20,13 @@ export class UsersService {
     });
   }
 
-  async getUser(id: number) {
+  async getUser(args: Prisma.UserWhereUniqueInput) {
+    return this.prismaService.user.findUniqueOrThrow({
+      where: args,
+    });
+  }
+
+  async getUserById(id: number) {
     return this.prismaService.user.findUnique({
       where: { id },
     });
@@ -44,10 +50,19 @@ export class UsersService {
       }
 
       // Fields to exclude from comparison
-      const excludedFields = ['id', 'email', 'createdAt', 'updatedAt', 'password', 'newPassword'];
+      const excludedFields = [
+        'id',
+        'email',
+        'createdAt',
+        'updatedAt',
+        'password',
+        'newPassword',
+      ];
 
       // Prepare update data
-      const updateData: Prisma.UserUpdateInput & { newPassword?: string } = { ...data };
+      const updateData: Prisma.UserUpdateInput & { newPassword?: string } = {
+        ...data,
+      };
       delete updateData.newPassword; // Remove newPassword from the data to update
 
       // Handle password update if newPassword is provided
@@ -59,7 +74,7 @@ export class UsersService {
       }
 
       // Compare existing user with new data
-      const hasChanges = Object.keys(updateData).some(key => {
+      const hasChanges = Object.keys(updateData).some((key) => {
         if (excludedFields.includes(key)) return false;
         return updateData[key] !== existingUser[key];
       });
