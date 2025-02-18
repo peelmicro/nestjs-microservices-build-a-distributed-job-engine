@@ -1024,3 +1024,7 @@ Snapshots:   0 total
 Time:        5.15 s
 Ran all test suites.
 ```
+
+### 4.7. Modifying the `auth` microservice to manage the incoming requests with cookies
+
+- We need to modify the `auth` microservice to use the `JwtService` to sign the token.
