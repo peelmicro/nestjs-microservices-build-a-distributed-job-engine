@@ -1027,4 +1027,620 @@ Ran all test suites.
 
 ### 4.7. Modifying the `auth` microservice to manage the incoming requests with cookies
 
-- We need to modify the `auth` microservice to use the `JwtService` to sign the token.
+#### 4.7.1. Installing the dependencies
+
+- We need to install the `passport-jwt` and `@nestjs/passport` and `passport` dependencies to manage the incoming requests using `Passport`.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i --save passport-jwt @nestjs/passport passport --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+.
+added 5 packages, removed 1 package, and audited 1276 packages in 5s
+
+221 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+- And the types:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i --save-dev @types/passport-jwt --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+.
+added 3 packages, and audited 1279 packages in 2s
+
+221 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+- We also need to install `cookie-parser` to parse the cookies:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i --save cookie-parser --force
+npm WARN using --force Recommended protections disabled.
+npm WARN ERESOLVE overriding peer dependency
+.
+added 2 packages, removed 1 package, and audited 1281 packages in 6s
+
+221 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+- And the types:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i --save-dev @types/cookie-parser --force
+npm warn using --force Recommended protections disabled.
+npm warn ERESOLVE overriding peer dependency
+.
+added 1 package, and audited 1282 packages in 2s
+
+221 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+#### 4.7.2. Creating the JWT strategy
+
+- We need to create the JWT strategy to validate the token:
+
+> apps/auth/src/app/auth/strategies/jwt.strategy.ts
+
+```ts
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { TokenPayload } from '../token-payload.interface';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(configService: ConfigService) {
+    super({
+      jwtFromRequest: ExtractJwt.fromExtractors([(request: any) => request.cookies?.Authentication || request.token]),
+      secretOrKey: configService.getOrThrow('JWT_SECRET'),
+    });
+  }
+
+  validate(payload: TokenPayload) {
+    return payload;
+  }
+}
+```
+
+#### 4.7.3. Modifying the `main.ts` file to use the JWT strategy
+
+```diff
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import * as express from 'express';
+import { ConfigService } from '@nestjs/config';
++import * as cookieParser from 'cookie-parser';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use(express.json());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+    }),
+  );
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix);
++ app.use(cookieParser());
+  const port = app.get(ConfigService).getOrThrow('PORT');
+  await app.listen(port);
+  Logger.log(
+    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
+  );
+}
+
+bootstrap();
+```
+
+> Note: We need to remove the following lines from the `tsconfig.json` file:
+
+```diff
+-"compilerOptions": {
+-  "esModuleInterop": true
+-}
+```
+
+#### 4.7.4. Modifying the `auth.module.ts` file to use the JWT strategy
+
+- We need to modify the `auth.module.ts` file to use the JWT strategy:
+
+> apps/auth/src/app/auth/auth.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthResolver } from './auth.resolver';
+import { AuthService } from './auth.service';
+import { UsersModule } from '../users/users.module';
++import { JwtStrategy } from './strategies/jwt.strategy';
+@Module({
+  imports: [
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.getOrThrow('JWT_EXPIRATION_MS'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    UsersModule,
+  ],
+  providers: [
+    AuthResolver,
+    AuthService,
++   JwtStrategy
+  ],
+})
+export class AuthModule {}
+```
+
+#### 4.7.5. Creating the `Guards` to validate the token
+
+- We need to create the `Guards` to validate the token:
+
+> apps/auth/src/app/auth/guards/jwt-auth.guard.ts
+
+```ts
+import { AuthGuard } from '@nestjs/passport';
+
+export class JwtAuthGuard extends AuthGuard('jwt') {}
+```
+
+> apps/auth/src/app/auth/guards/gql-auth.guard.ts
+
+```ts
+import { ExecutionContext } from '@nestjs/common';
+import { GqlExecutionContext } from '@nestjs/graphql';
+import { AuthGuard } from '@nestjs/passport';
+
+export class GqlAuthGuard extends AuthGuard('jwt') {
+  getRequest(context: ExecutionContext) {
+    const ctx = GqlExecutionContext.create(context);
+    return ctx.getContext().req;
+  }
+}
+```
+
+#### 4.7.6. Modifying the `auth.resolver.ts` file to use the `Guards`
+
+- We need to modify the `auth.resolver.ts` file to use the `Guards`:
+
+> apps/auth/src/app/users/users.resolver.ts
+
+```diff
+import { Mutation, Args, Query, Resolver } from '@nestjs/graphql';
+import { User } from './models/user.model';
+import { UsersService } from './users.service';
+import { UpsertUserInput } from './dto/upsert-user.input';
+import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
++import { UseGuards } from '@nestjs/common';
+
+@Resolver(() => User)
+export class UsersResolver {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Mutation(() => User)
+  async upsertUser(@Args('upsertUserInput') upsertUserInput: UpsertUserInput) {
+    return this.usersService.upsertUser(upsertUserInput);
+  }
+
++ @UseGuards(GqlAuthGuard)
+  @Query(() => [User], { name: 'users' })
+  async getUsers() {
+    return this.usersService.getUsers();
+  }
+
++ @UseGuards(GqlAuthGuard)
+  @Query(() => User, { name: 'user' })
+  async getUserById(@Args('id', { type: () => Number }) id: number) {
+    return this.usersService.getUserById(id);
+  }
+
++ @UseGuards(GqlAuthGuard)
+  @Query(() => User, { name: 'userByEmail' })
+  async getUserByEmail(@Args('email', { type: () => String }) email: string) {
+    return this.usersService.getUserByEmail(email);
+  }
+}
+```
+
+#### 4.7.7. Modifying the `users.http` file to send the token in the cookies
+
+- If we execute the `users.http` file, we will get the following error:
+
+> request
+
+```
+### Get all users
+
+POST http://localhost:3000/graphql
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+> response
+
+```
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 2005
+ETag: W/"7d5-pIQWyfSu3yp/7VP+x8e7T2bhQvo"
+Date: Thu, 20 Feb 2025 04:53:56 GMT
+Connection: close
+
+{
+  "errors": [
+    {
+      "message": "Unauthorized",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "users"
+      ],
+      "extensions": {
+        "code": "UNAUTHENTICATED",
+        "stacktrace": [
+          "UnauthorizedException: Unauthorized",
+          "    at GqlAuthGuard.handleRequest (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/passport/dist/auth.guard.js:60:30)",
+          "    at /home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/passport/dist/auth.guard.js:44:124",
+          "    at /home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/passport/dist/auth.guard.js:83:24",
+          "    at allFailed (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport/lib/middleware/authenticate.js:110:18)",
+          "    at attempt (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport/lib/middleware/authenticate.js:183:28)",
+          "    at JwtStrategy.strategy.fail (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport/lib/middleware/authenticate.js:314:9)",
+          "    at JwtStrategy.authenticate (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport-jwt/lib/strategy.js:96:21)",
+          "    at attempt (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport/lib/middleware/authenticate.js:378:16)",
+          "    at authenticate (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/passport/lib/middleware/authenticate.js:379:7)",
+          "    at /home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/passport/dist/auth.guard.js:88:3"
+        ],
+        "originalError": {
+          "message": "Unauthorized",
+          "statusCode": 401
+        }
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+- We need to fix the `users.http` file to send the token in the cookies:
+
+> apps/auth/src/app/users/users.http
+
+```http
+@url = http://localhost:3000/graphql
+
+### Login
+# @name login
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
+
+### Get all users
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by email
+
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  userByEmail(email: "my-email2@msn.com")
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by id
+
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  user(id: 1)
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Create a user
+
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Update password for a user
+
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!",
+    newPassword: "MyPassword2!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+- Now, we need to execute the `### Login` request first and then the other requests:
+
+> request
+
+```http
+### Get all users
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+> response
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 373
+ETag: W/"175-AgLwgQzaJgfzHwNLABfqoch//EA"
+Date: Fri, 21 Feb 2025 06:09:16 GMT
+Connection: close
+
+{
+  "data": {
+    "users": [
+      {
+        "id": "1",
+        "email": "juanp_perez@msn.com",
+        "createdAt": "2025-02-16T17:17:02.485Z",
+        "updatedAt": "2025-02-16T17:17:02.468Z"
+      },
+      {
+        "id": "2",
+        "email": "my-email@msn.com",
+        "createdAt": "2025-02-16T17:38:06.463Z",
+        "updatedAt": "2025-02-16T17:38:06.459Z"
+      },
+      {
+        "id": "3",
+        "email": "my-email2@msn.com",
+        "createdAt": "2025-02-16T17:42:12.746Z",
+        "updatedAt": "2025-02-17T04:40:39.608Z"
+      }
+    ]
+  }
+}
+```
+
+#### 4.7.8. Adding the `User decorator`
+
+- We need to add the `User decorator` to the `users.resolver.ts` file:
+
+> apps/auth/src/app/auth/current-user.decorator.ts
+
+```ts
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { GqlExecutionContext } from '@nestjs/graphql';
+
+export const CurrentUser = createParamDecorator((_data: unknown, context: ExecutionContext) => GqlExecutionContext.create(context).getContext().req.user);
+```
+
+- We need to add the `CurrentUser` decorator to the `users.resolver.ts` file:
+
+> apps/auth/src/app/users/users.resolver.ts
+
+```ts
+import { Mutation, Args, Query, Resolver } from '@nestjs/graphql';
+import { User } from './models/user.model';
+import { UsersService } from './users.service';
+import { UpsertUserInput } from './dto/upsert-user.input';
+import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
+import { UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { TokenPayload } from '../auth/token-payload.interface';
+
+@Resolver(() => User)
+export class UsersResolver {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Mutation(() => User)
+  async upsertUser(@Args('upsertUserInput') upsertUserInput: UpsertUserInput) {
+    return this.usersService.upsertUser(upsertUserInput);
+  }
+
+  @UseGuards(GqlAuthGuard)
+  @Query(() => [User], { name: 'users' })
+  async getUsers() {
+    return this.usersService.getUsers();
+  }
+
+  @UseGuards(GqlAuthGuard)
+  @Query(() => User, { name: 'user' })
+  async getUserById(@Args('id', { type: () => Number }) id: number) {
+    return this.usersService.getUserById(id);
+  }
+
+  @UseGuards(GqlAuthGuard)
+  @Query(() => User, { name: 'userByEmail' })
+  async getUserByEmail(@Args('email', { type: () => String }) email: string) {
+    return this.usersService.getUserByEmail(email);
+  }
+
+  @UseGuards(GqlAuthGuard)
+  @Query(() => User, { name: 'getUserFromCookie' })
+  async getUserFromCookie(@CurrentUser() { userId }: TokenPayload) {
+    return this.usersService.getUserById(userId);
+  }
+}
+```
+
+- I can test it adding:
+
+> apps/auth/src/app/users/users.http
+
+```http
+### Get a user from the cookie
+
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  getUserFromCookie
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+- We can see the response:
+
+> response
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 148
+ETag: W/"94-UHW8j3+XZxI+hYjcDRvVTQSO6Gc"
+Date: Fri, 21 Feb 2025 06:35:42 GMT
+Connection: close
+
+{
+  "data": {
+    "getUserFromCookie": {
+      "id": "3",
+      "email": "my-email2@msn.com",
+      "createdAt": "2025-02-16T17:42:12.746Z",
+      "updatedAt": "2025-02-17T04:40:39.608Z"
+    }
+  }
+}
+```

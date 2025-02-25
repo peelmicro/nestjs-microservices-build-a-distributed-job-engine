@@ -1,8 +1,27 @@
+@url = http://localhost:3000/graphql
+
+### Login
+# @name login
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
 
 ### Get all users
-
-POST http://localhost:3000/graphql
+POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 query {
@@ -17,8 +36,9 @@ query {
 
 ### Get a user by email
 
-POST http://localhost:3000/graphql
+POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 query {
@@ -33,8 +53,9 @@ query {
 
 ### Get a user by id
 
-POST http://localhost:3000/graphql
+POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 query {
@@ -47,9 +68,29 @@ query {
   }
 }
 
+### Get a user from the cookie
+
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  getUserFromCookie
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
 ### Create a user
 
-POST http://localhost:3000/graphql
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
 mutation {
   upsertUser(upsertUserInput: {
     email: "my-email2@msn.com",
@@ -65,7 +106,7 @@ mutation {
 
 ### Update password for a user
 
-POST http://localhost:3000/graphql
+POST {{url}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 

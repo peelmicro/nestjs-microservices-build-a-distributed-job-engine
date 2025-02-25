@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma-clients/auth';
 import { PrismaService } from '../prisma/prisma.service';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 bcrypt.setRandomFallback((len: number) => {
   return Array.from(crypto.randomBytes(len));
