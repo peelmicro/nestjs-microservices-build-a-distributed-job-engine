@@ -47,6 +47,6 @@ jobs:
       # - run: npx nx-cloud record -- echo Hello World
       # Nx Affected runs only tasks affected by the changes in this PR/commit. Learn more: https://nx.dev/ci/features/affected
       # - run: npx nx affected -t lint test build # This is not needed, because we are not using Nx Cloud
-      - run: npx nx run-many -t lint test build --all # Run on ALL projects, this is a better approach than nx affected if we don't use Nx Cloud
+      - run: npx nx run-many --targets=lint,test,build --all # Run on ALL projects, this is a better approach than nx affected if we don't use Nx Cloud
         env:
           NX_VERBOSE_LOGGING: 'true'
