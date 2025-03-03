@@ -32,19 +32,21 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - run: npm install -g npm-check-updates
-      - run: ncu -u
-      - run: npm i --legacy-peer-deps
+      # - run: npm install -g npm-check-updates
+      # - run: ncu -u
+      - run: npm ci --legacy-peer-deps
 
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: main
-          set-environment-variables-for-job: true
-          error-on-no-successful-workflow: false
+      # This could be not needed, because we are not going to use Nx Cloud
+      # - uses: nrwl/nx-set-shas@v4
+      #   with:
+      #     main-branch-name: main
+      #     set-environment-variables-for-job: true
+      #     error-on-no-successful-workflow: false
 
       # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
       # - run: npx nx-cloud record -- echo Hello World
       # Nx Affected runs only tasks affected by the changes in this PR/commit. Learn more: https://nx.dev/ci/features/affected
-      - run: npx nx affected -t lint test build
+      # - run: npx nx affected -t lint test build # This is not needed, because we are not using Nx Cloud
+      - run: npx nx run-many -t lint test build --all # Run on ALL projects, this is a better approach than nx affected if we don't use Nx Cloud
         env:
           NX_VERBOSE_LOGGING: 'true'
