@@ -1,0 +1,35 @@
+@url = http://localhost:3001/graphql
+
+### Get jobs metadata
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+
+### Execute job with invalid name
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Bad"}) {
+    name
+  }
+}
+
+### Execute job with valid name
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci"}) {
+    name
+  }
+}

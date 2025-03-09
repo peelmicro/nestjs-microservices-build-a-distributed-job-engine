@@ -849,7 +849,7 @@ export class AuthResolver {
 }
 ```
 
-- We need to ensure the solution is working by running the `nx run auth` command.
+- We need to ensure the solution is working by running the `nx serve auth` command.
 
 ```bash
 juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve auth
