@@ -1031,3 +1031,239 @@ For help, see: https://nodejs.org/en/docs/inspector
 ```
 
 - We can see that the `generate-prisma` and `generate-ts-proto` targets are executed when we execute `nx serve auth`.
+
+### 6.2 Creating the `gRPC Server`
+
+#### 6.2.1 We need to modify the `nx.json` file to include the `generate-ts-proto` target.
+
+> nx.json
+
+```diff
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/.eslintrc.json",
+      "!{projectRoot}/eslint.config.mjs",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/tsconfig.spec.json",
+      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/src/test-setup.[jt]s",
+      "!{projectRoot}/test-setup.[jt]s"
+    ],
+    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
+  },
+  "plugins": [
+    {
+      "plugin": "@nx/webpack/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "previewTargetName": "preview",
+        "buildDepsTargetName": "build-deps",
+        "watchDepsTargetName": "watch-deps"
+      }
+    },
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "lint"
+      }
+    },
+    {
+      "plugin": "@nx/jest/plugin",
+      "options": {
+        "targetName": "test"
+      },
+      "exclude": ["apps/auth-e2e/**/*", "apps/jobs-e2e/**/*"]
+    }
+  ],
++ "targetDefaults": {
++   "build": {
++     "inputs": [
++       "{projectRoot}/**/*",
++       "{workspaceRoot}/libs/**/*",
++       "{workspaceRoot}/proto/**/*"
++     ],
++     "options": {
++       "assets": [
++         {
++           "glob": "**/*.proto",
++           "input": "{workspaceRoot}/proto",
++           "output": "proto"
++         }
++       ]
++     }
++   }
++ }
+}
+
+```
+
+#### 6.2.2 Modify the `main.ts` file to include the `gRPC Server`
+
+- We need to modify the `main.ts` file to include the `gRPC Server`.
+
+> apps/auth/src/main.ts
+
+```diff
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import * as express from 'express';
+import { ConfigService } from '@nestjs/config';
+import * as cookieParser from 'cookie-parser';
++ import { GrpcOptions, Transport } from '@nestjs/microservices';
++ import { AUTH_PACKAGE_NAME } from 'types/proto/auth';
++import { join } from 'path';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use(express.json());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+    }),
+  );
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix);
+  app.use(cookieParser());
+  const port = app.get(ConfigService).getOrThrow('PORT');
++ app.connectMicroservice<GrpcOptions>(
++   {
++     transport: Transport.GRPC,
++     options: {
++       package: AUTH_PACKAGE_NAME,
++       protoPath: join(__dirname, 'proto', 'auth.proto'),
++     },
++   },
++ );
++ await app.startAllMicroservices();
+  await app.listen(port);
+  Logger.log(
+    `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
+  );
+}
+bootstrap();
+```
+
+#### 6.2.3 We need to ensure we can serve the `auth` microservice.
+
+- We need to ensure we can serve the `auth` microservice by running:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve auth
+
+ NX   Running target serve for project auth and 3 tasks it depends on:
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run auth:generate-prisma  [existing outputs match the cache, left as is]
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/auth in 50ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Easily identify and fix slow SQL queries in your app. Optimize helps you enhance your visibility: https://pris.ly/--optimize
+
+
+> nx run auth:generate-ts-proto
+
+> nx generate-ts-proto
+
+
+> nx run @jobber/source:generate-ts-proto
+
+> @jobber/source@0.0.0 generate-ts-proto
+> npx protoc --plugin=./node_modules/.bin/ptoroc-gen_ts_proto --ts_proto_out=./types ./proto/*.proto --ts_proto_opt=nestJs=true
+
+
+
+ NX   Successfully ran target generate-ts-proto for project @jobber/source
+
+
+
+> nx run auth:build  [existing outputs match the cache, left as is]
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 24.4 KiB [entry] [rendered]
+webpack compiled successfully (0622b8091b6690c5)
+
+> nx run auth:serve:development
+
+
+ NX   Running target build for project auth and 2 tasks it depends on:
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run auth:generate-prisma  [existing outputs match the cache, left as is]
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/auth in 50ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Easily identify and fix slow SQL queries in your app. Optimize helps you enhance your visibility: https://pris.ly/--optimize
+
+
+> nx run auth:generate-ts-proto
+
+> nx generate-ts-proto
+
+
+> nx run @jobber/source:generate-ts-proto
+
+> @jobber/source@0.0.0 generate-ts-proto
+> npx protoc --plugin=./node_modules/.bin/ptoroc-gen_ts_proto --ts_proto_out=./types ./proto/*.proto --ts_proto_opt=nestJs=true
+
+
+
+ NX   Successfully ran target generate-ts-proto for project @jobber/source
+
+
+
+> nx run auth:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 24.4 KiB [entry] [rendered]
+webpack compiled successfully (0622b8091b6690c5)
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project auth and 2 tasks it depends on
+
+Nx read the output from the cache instead of running the command for 1 out of 3 tasks.
+
+Debugger listening on ws://localhost:9229/983bc999-a123-4b55-8333-1f5169099152
+For help, see: https://nodejs.org/en/docs/inspector
+
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [NestFactory] Starting Nest application...
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] AppModule dependencies initialized +14ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] PrismaModule dependencies initialized +0ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] UsersModule dependencies initialized +1ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] GraphQLSchemaBuilderModule dependencies initialized +0ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] AuthModule dependencies initialized +1ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [InstanceLoader] GraphQLModule dependencies initialized +0ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [NestMicroservice] Nest microservice successfully started +74ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [GraphQLModule] Mapped {/graphql, POST} route +96ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG [NestApplication] Nest application successfully started +2ms
+[Nest] 1006315  - 10/03/2025, 17:21:34     LOG 🚀 Application is running on: http://localhost:3000/api
+```
