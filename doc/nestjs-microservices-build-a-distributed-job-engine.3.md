@@ -1267,3 +1267,280 @@ For help, see: https://nodejs.org/en/docs/inspector
 [Nest] 1006315  - 10/03/2025, 17:21:34     LOG [NestApplication] Nest application successfully started +2ms
 [Nest] 1006315  - 10/03/2025, 17:21:34     LOG 🚀 Application is running on: http://localhost:3000/api
 ```
+
+### 6.3 Creating the `Auth` controller and the `grPC` client
+
+#### 6.3.1 Creating the `Auth` controller
+
+- We need to create the `Auth` controller.
+
+> apps/auth/src/app/auth/auth.controller.ts
+
+```ts
+import { Controller, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Observable } from 'rxjs';
+
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UsersService } from '../users/users.service';
+import { TokenPayload } from './token-payload.interface';
+import { AuthServiceControllerMethods } from 'types/proto/auth';
+import { AuthenticateRequest, AuthServiceController, User } from 'types/proto/auth';
+
+@Controller()
+@AuthServiceControllerMethods()
+export class AuthController implements AuthServiceController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @UseGuards(JwtAuthGuard)
+  authenticate(request: AuthenticateRequest & { user: TokenPayload }): Promise<User> | Observable<User> | User {
+    return this.usersService.getUser({ id: request.user.userId });
+  }
+}
+```
+
+- We need to modify the `auth.module.ts` file to include the `AuthController`.
+
+> apps/auth/src/app/auth/auth.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthResolver } from './auth.resolver';
+import { AuthService } from './auth.service';
+import { UsersModule } from '../users/users.module';
+import { JwtStrategy } from './strategies/jwt.strategy';
++ import { AuthController } from './auth.controller';
+@Module({
+  imports: [
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.getOrThrow('JWT_EXPIRATION_MS'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    UsersModule,
+  ],
++ controllers: [AuthController],
+  providers: [AuthResolver, AuthService, JwtStrategy],
+})
+export class AuthModule {}
+```
+
+#### 6.3.2 Modifying the `jobs.module.ts` file to include the `Auth` client
+
+- We need to modify the `jobs.module.ts` file to include the `Auth` client.
+
+> apps/jobs/src/app/jobs/jobs.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { FibonacciJob } from './fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
++import { ClientsModule, Transport } from '@nestjs/microservices';
++import { AUTH_PACKAGE_NAME } from 'types/proto/auth';
++import { join } from 'path';
+
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
++   ClientsModule.register([
++     {
++       name: AUTH_PACKAGE_NAME,
++       transport: Transport.GRPC,
++       options: {
++         package: AUTH_PACKAGE_NAME,
++         protoPath: join(__dirname, 'proto', 'auth.proto'),
++       },
++     },
++   ]),
+ ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver],
+})
+export class JobsModule {}
+```
+
+#### 6.3.3 We need to ensure that both microservices are running correctly.
+
+- We need to execute this command to start both microservices:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx run-many -t serve -p auth jobs
+
+ NX   Running target serve for 2 projects and 4 tasks they depend on:
+
+- auth
+- jobs
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run auth:generate-prisma
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/auth in 65ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
+
+
+> nx run auth:generate-ts-proto
+
+> nx generate-ts-proto
+
+
+> nx run @jobber/source:generate-ts-proto
+
+> @jobber/source@0.0.0 generate-ts-proto
+> npx protoc --plugin=./node_modules/.bin/ptoroc-gen_ts_proto --ts_proto_out=./types ./proto/*.proto --ts_proto_opt=nestJs=true
+
+
+
+ NX   Successfully ran target generate-ts-proto for project @jobber/source
+
+
+
+> nx run jobs:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 10.4 KiB [entry] [rendered]
+webpack compiled successfully (89563d655f0f081f)
+
+> nx run jobs:serve:development
+
+
+> nx run jobs:build:development
+
+> webpack-cli build node-env=development
+
+
+> nx run auth:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 26 KiB [entry] [rendered]
+webpack compiled successfully (697e5abcdcd9abc3)
+
+> nx run auth:serve:development
+
+
+ NX   Running target build for project auth and 2 tasks it depends on:
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run auth:generate-prisma  [existing outputs match the cache, left as is]
+
+> prisma generate
+
+Environment variables loaded from ../../.env
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/auth in 65ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Help us improve the Prisma ORM for everyone. Share your feedback in a short 2-min survey: https://pris.ly/orm/survey/release-5-22
+
+
+> nx run auth:generate-ts-proto
+
+> nx generate-ts-proto
+
+
+> nx run @jobber/source:generate-ts-proto
+
+> @jobber/source@0.0.0 generate-ts-proto
+> npx protoc --plugin=./node_modules/.bin/ptoroc-gen_ts_proto --ts_proto_out=./types ./proto/*.proto --ts_proto_opt=nestJs=true
+chunk (runtime: main) main.js (main) 10.4 KiB [entry] [rendered]
+webpack compiled successfully (ed56b77070dff9f2)
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project jobs
+
+
+Debugger listening on ws://localhost:9229/5bfaaad1-8c70-486a-a25d-3727cfab3028
+For help, see: https://nodejs.org/en/docs/inspector
+
+
+
+
+ NX   Successfully ran target generate-ts-proto for project @jobber/source
+
+
+
+> nx run auth:build:development
+
+> webpack-cli build node-env=development
+
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [NestFactory] Starting Nest application...
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] AppModule dependencies initialized +15ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] ClientsModule dependencies initialized +0ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] DiscoveryModule dependencies initialized +0ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] JobsModule dependencies initialized +1ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] GraphQLSchemaBuilderModule dependencies initialized +0ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [InstanceLoader] GraphQLModule dependencies initialized +0ms
+[
+  {
+    meta: {
+      name: 'Fibonacci',
+      description: 'Generate a Fibonacci sequence and store it in the DB.'
+    },
+    discoveredClass: {
+      name: 'FibonacciJob',
+      instance: FibonacciJob {},
+      injectType: [class FibonacciJob extends AbstractJob],
+      dependencyType: [class FibonacciJob extends AbstractJob],
+      parentModule: [Object]
+    }
+  }
+]
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [GraphQLModule] Mapped {/graphql, POST} route +87ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG [NestApplication] Nest application successfully started +6ms
+[Nest] 1071607  - 10/03/2025, 18:21:53     LOG 🚀 Application is running on: http://localhost:3001/api
+chunk (runtime: main) main.js (main) 26 KiB [entry] [rendered]
+webpack compiled successfully (697e5abcdcd9abc3)
+
+—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project auth and 2 tasks it depends on
+
+Nx read the output from the cache instead of running the command for 1 out of 3 tasks.
+
+Starting inspector on localhost:9229 failed: address already in use
+
+[Nest] 1071807  - 10/03/2025, 18:21:57     LOG [NestFactory] Starting Nest application...
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] AppModule dependencies initialized +18ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] PrismaModule dependencies initialized +0ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] ConfigModule dependencies initialized +1ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] UsersModule dependencies initialized +2ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] GraphQLSchemaBuilderModule dependencies initialized +0ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] GraphQLModule dependencies initialized +1ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [NestMicroservice] Nest microservice successfully started +87ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [RoutesResolver] AuthController {/api}: +3ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [GraphQLModule] Mapped {/graphql, POST} route +106ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG [NestApplication] Nest application successfully started +1ms
+[Nest] 1071807  - 10/03/2025, 18:21:58     LOG 🚀 Application is running on: http://localhost:3000/api
+```
