@@ -1,4 +1,4 @@
-import { Controller, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';

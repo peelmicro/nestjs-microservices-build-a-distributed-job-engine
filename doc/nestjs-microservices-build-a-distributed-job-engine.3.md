@@ -1272,12 +1272,17 @@ For help, see: https://nodejs.org/en/docs/inspector
 
 #### 6.3.1 Creating the `Auth` controller
 
-- We need to create the `Auth` controller.
+- We need to create the `Auth` controller to handle the `gRPC` requests and obtain the `user` information and to manage the `JWT` token in the microservices.
+  - The `authenticate` method in the `AuthController` is a `gRPC` endpoint, not a `REST` or `GraphQL` endpoint
+  - It's meant to be called by other services (like `GraphQL` API) when they need to validate a token
+  - It's protected by `JwtAuthGuard`, which means it expects a JWT token in the request
+  - It's set up as a `gRPC` controller with `@AuthServiceControllerMethods()`
+  - When we make this request, the `GqlAuthGuard` will call the `authenticate` method via `gRPC`
 
 > apps/auth/src/app/auth/auth.controller.ts
 
 ```ts
-import { Controller, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, UseGuards } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -1370,7 +1375,7 @@ import { JobsResolver } from './jobs.resolver';
 export class JobsModule {}
 ```
 
-#### 6.3.3 We need to ensure that both microservices are running correctly.
+#### 6.3.3 We need to ensure that both microservices are running correctly
 
 - We need to execute this command to start both microservices:
 
@@ -1543,4 +1548,335 @@ Starting inspector on localhost:9229 failed: address already in use
 [Nest] 1071807  - 10/03/2025, 18:21:58     LOG [GraphQLModule] Mapped {/graphql, POST} route +106ms
 [Nest] 1071807  - 10/03/2025, 18:21:58     LOG [NestApplication] Nest application successfully started +1ms
 [Nest] 1071807  - 10/03/2025, 18:21:58     LOG 🚀 Application is running on: http://localhost:3000/api
+```
+
+### 6.4 Creating a `gRPC CGQL` Auth Guard
+
+#### 6.4.1 Creating the `gRPC CGQL` Auth Guard
+
+- We need to create a `gRPC CGQL` Auth Guard that we can use to authenticate the user using `GraphQL`.
+
+> libs/nestjs/src/lib/guards/gql-auth.guard.ts
+
+```ts
+import { CanActivate, ExecutionContext, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+
+import { catchError, map, Observable, of } from 'rxjs';
+import { ClientGrpc } from '@nestjs/microservices';
+import { GqlExecutionContext } from '@nestjs/graphql';
+import { AUTH_PACKAGE_NAME, AUTH_SERVICE_NAME, AuthServiceClient } from 'types/proto/auth';
+
+@Injectable()
+export class GqlAuthGuard implements CanActivate, OnModuleInit {
+  private readonly logger = new Logger(GqlAuthGuard.name);
+  private authService: AuthServiceClient;
+
+  constructor(@Inject(AUTH_PACKAGE_NAME) private client: ClientGrpc) {}
+
+  onModuleInit() {
+    this.authService = this.client.getService<AuthServiceClient>(AUTH_SERVICE_NAME);
+  }
+
+  canActivate(context: ExecutionContext): boolean | Promise<boolean> | Observable<boolean> {
+    const token = this.getRequest(context).cookies?.Authentication;
+
+    if (!token) {
+      return false;
+    }
+
+    return this.authService.authenticate({ token }).pipe(
+      map((res) => {
+        this.getRequest(context).user = res;
+        return true;
+      }),
+      catchError((err) => {
+        this.logger.error(err);
+        return of(false);
+      }),
+    );
+  }
+
+  private getRequest(context: ExecutionContext) {
+    const ctx = GqlExecutionContext.create(context);
+    return ctx.getContext().req;
+  }
+}
+```
+
+- We need to export the `GqlAuthGuard` from the `nestjs` library.
+
+> libs/nestjs/src/lib/guards/index.ts
+
+```ts
+export * from './gql-auth.guard';
+```
+
+> libs/nestjs/src/lib/index.ts
+
+```diff
+export * from './graphql';
++export * from './guards';
+```
+
+#### 6.4.2 Applying the `gRPC CGQL` Auth Guard to the `Jobs` resolver
+
+- We need to apply the `gRPC CGQL` Auth Guard to the `Jobs` resolver.
+
+> apps/jobs/src/app/jobs/jobs.resolver.ts
+
+```diff
+import { Mutation, Args, Query, Resolver } from '@nestjs/graphql';
+import { JobsService } from './jobs.service';
+import { Job } from './models/job.model';
+import { ExecuteJobInput } from './dto/execute-job.input';
++import { GqlAuthGuard } from '@jobber/nestjs';
++import { UseGuards } from '@nestjs/common';
+
+@Resolver()
+export class JobsResolver {
+  constructor(private readonly jobsService: JobsService) {}
+
+  @Query(() => [Job], { name: 'jobsMetadata' })
++  @UseGuards(GqlAuthGuard)
+  async getJobsMetadata() {
+    return this.jobsService.getJobsMetadata();
+  }
+
+  @Mutation(() => Job)
++  @UseGuards(GqlAuthGuard)
+  async executeJob(@Args('executeJobInput') executeJobInput: ExecuteJobInput) {
+    return this.jobsService.executeJob(executeJobInput.name);
+  }
+}
+```
+
+#### 6.4.3 Testing the `gRPC CGQL` Auth Guard
+
+##### 6.4.3.1 Testing the `gRPC CGQL` Auth Guard without the token
+
+- We need to test the `gRPC CGQL` by using the `jobs.http` file.
+
+> apps/jobs/src/app/jobs/jobs.http
+> Request:
+
+```http
+@url = http://localhost:3001/graphql
+
+### Get jobs metadata
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+```
+
+> Response:
+
+```json
+TTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 927
+ETag: W/"39f-OXgbtLFfXXKhxY0Dq8LTraL8TYw"
+Date: Tue, 11 Mar 2025 05:09:27 GMT
+Connection: close
+
+{
+  "errors": [
+    {
+      "message": "Forbidden resource",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "jobsMetadata"
+      ],
+      "extensions": {
+        "code": "FORBIDDEN",
+        "stacktrace": [
+          "ForbiddenException: Forbidden resource",
+          "    at canActivateFn (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/helpers/external-context-creator.js:157:23)",
+          "    at processTicksAndRejections (node:internal/process/task_queues:105:5)",
+          "    at target (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/helpers/external-context-creator.js:73:31)",
+          "    at Object.jobsMetadata (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/helpers/external-proxy.js:9:24)"
+        ],
+        "originalError": {
+          "message": "Forbidden resource",
+          "error": "Forbidden",
+          "statusCode": 403
+        }
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+##### 6.4.3.2 Modifying the `jobs.http` file to send the token in the cookies
+
+- We need to modify the `jobs.http` file to send the token in the cookies:
+
+> apps/jobs/src/app/jobs/job.http
+
+```http
+@urlLogin = http://localhost:3000/graphql
+@url = http://localhost:3001/graphql
+
+### Login
+# @name login
+POST {{urlLogin}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
+
+### Get jobs metadata
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+
+### Execute job with invalid name
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Bad"}) {
+    name
+  }
+}
+
+### Execute job with valid name
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci"}) {
+    name
+  }
+}
+```
+
+##### 6.4.3.3 Testing the `gRPC CGQL` Auth Guard with the token
+
+###### 6.4.3.3.1 Login
+
+- We need to login first from the `jobs.http` file to get the token.
+
+> apps/jobs/src/app/jobs/job.http
+
+```http
+@urlLogin = http://localhost:3000/graphql
+@url = http://localhost:3001/graphql
+
+### Login
+# @name login
+POST {{urlLogin}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+```
+
+> Response:
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Set-Cookie: Authentication=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjMsImlhdCI6MTc0MTY3NzI4NSwiZXhwIjoxNzQxNzA2MDg1fQ.DhBKQDOdmR0VvtfD9Ealg8lkiyzlQAVtV2rFl6fcz5c; Path=/; Expires=Sun, 19 May 2080 21:29:30 GMT; HttpOnly; Secure
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 30
+ETag: W/"1e-EgvIyI72IVyUMhTGUlqB8zBQF6I"
+Date: Tue, 11 Mar 2025 07:14:45 GMT
+Connection: close
+
+{
+  "data": {
+    "login": {
+      "id": "3"
+    }
+  }
+}
+```
+
+###### 6.4.3.3.2 Get jobs metadata
+
+- We need to ensure we can execute the `jobs.http` file now with success.
+
+> apps/jobs/src/app/jobs/jobs.http
+
+```http
+.
+@url = http://localhost:3001/graphql
+.
+### Get jobs metadata
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+```
+
+> Response:
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 119
+ETag: W/"77-lnBxBNGpB4iJ5p8G93o6t7dfS14"
+Date: Tue, 11 Mar 2025 07:16:26 GMT
+Connection: close
+
+{
+  "data": {
+    "jobsMetadata": [
+      {
+        "name": "Fibonacci",
+        "description": "Generate a Fibonacci sequence and store it in the DB."
+      }
+    ]
+  }
+}
 ```

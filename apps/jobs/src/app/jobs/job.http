@@ -1,8 +1,27 @@
+@urlLogin = http://localhost:3000/graphql
 @url = http://localhost:3001/graphql
+
+### Login
+# @name login
+POST {{urlLogin}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
 
 ### Get jobs metadata
 POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 query {
@@ -15,6 +34,7 @@ query {
 ### Execute job with invalid name
 POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 mutation {
@@ -26,6 +46,7 @@ mutation {
 ### Execute job with valid name
 POST {{url}}
 Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 mutation {

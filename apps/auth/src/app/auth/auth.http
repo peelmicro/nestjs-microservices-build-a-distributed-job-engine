@@ -1,6 +1,7 @@
+@url = http://localhost:3000
 
-### Login
-POST http://localhost:3000/graphql
+### Login with GraphQL
+POST {{url}}/graphql
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
