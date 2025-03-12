@@ -1149,7 +1149,7 @@ async function bootstrap() {
 bootstrap();
 ```
 
-#### 6.2.3 We need to ensure we can serve the `auth` microservice.
+#### 6.2.3 We need to ensure we can serve the `auth` microservice
 
 - We need to ensure we can serve the `auth` microservice by running:
 

@@ -10,5 +10,13 @@ services:
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
 
+  pulsar:
+    image: apachepulsar/pulsar
+    command: >
+      /pulsar/bin/pulsar standalone
+    ports:
+      - 6650:6650
+    restart: always
+
 volumes:
   postgres_data:
