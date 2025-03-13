@@ -18,6 +18,13 @@ export class JobsResolver {
   @Mutation(() => Job)
   @UseGuards(GqlAuthGuard)
   async executeJob(@Args('executeJobInput') executeJobInput: ExecuteJobInput) {
-    return this.jobsService.executeJob(executeJobInput.name);
+    await this.jobsService.executeJob(
+      executeJobInput.name,
+      executeJobInput?.data,
+    );
+
+    // Return a Job object to satisfy the GraphQL schema
+    const job = this.jobsService.getJobByName(executeJobInput.name);
+    return job;
   }
 }

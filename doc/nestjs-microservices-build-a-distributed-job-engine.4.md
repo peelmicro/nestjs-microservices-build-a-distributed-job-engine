@@ -226,6 +226,374 @@ export * from './lib/pulsar.module';
 export * from './lib/pulsar.client';
 ```
 
-#### 7.2.7 Adding the Pulsar module to the jobs project
+#### 7.2.7 Modifying the `AbstractJob` class to use the Pulsar client
 
-- We are going to add the Pulsar module to the jobs project.
+##### 7.2.7.1 Modifying the `AbstractJob` class to use the Pulsar client
+
+- We are going to modify the `AbstractJob` class to use the Pulsar client.
+
+> apps/jobs/src/jobs/abstract.job.ts
+
+```typescript
+import { Producer } from 'pulsar-client';
+import { PulsarClient } from '@jobber/pulsar';
+import { OnModuleDestroy } from '@nestjs/common';
+
+export abstract class AbstractJob implements OnModuleDestroy {
+  private producer: Producer;
+
+  constructor(private readonly pulsarClient: PulsarClient) {}
+
+  async execute(data: object, name: string) {
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    await this.producer.send({ data: Buffer.from(JSON.stringify(data)) });
+  }
+
+  async onModuleDestroy() {
+    await this.producer.close();
+  }
+}
+```
+
+##### 7.2.7.2 Modifying the `jobs.module.ts` file to use the Pulsar client
+
+- We are going to modify the `jobs.module.ts` file to use the Pulsar client.
+
+> apps/jobs/src/app/jobs/jobs.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { FibonacciJob } from './fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AUTH_PACKAGE_NAME } from 'types/proto/auth';
+import { join } from 'path';
++import { PulsarModule } from '@jobber/pulsar';
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
++   PulsarModule,
+    ClientsModule.register([
+      {
+        name: AUTH_PACKAGE_NAME,
+        transport: Transport.GRPC,
+        options: {
+          package: AUTH_PACKAGE_NAME,
+          protoPath: join(__dirname, 'proto', 'auth.proto'),
+        },
+      },
+    ]),
+  ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver],
+})
+export class JobsModule {}
+```
+
+##### 7.2.7.3 Modifying the `jobs.service.ts` file to use the Pulsar client
+
+- We are going to modify the `jobs.service.ts` file to use the Pulsar client.
+
+> apps/jobs/src/app/jobs/jobs.service.ts
+
+```ts
+import { DiscoveredClassWithMeta, DiscoveryService } from '@golevelup/nestjs-discovery';
+import { BadRequestException, Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { JOB_METADATA_KEY } from '../decorators/job.decorator';
+import { JobMetadata } from '../interfaces/job-metadata.interface';
+import { AbstractJob } from './abstract.job';
+
+@Injectable()
+export class JobsService implements OnModuleInit {
+  private jobs: DiscoveredClassWithMeta<JobMetadata>[] = [];
+
+  constructor(private readonly discoveryService: DiscoveryService) {}
+
+  async onModuleInit() {
+    this.jobs = await this.discoveryService.providersWithMetaAtKey<JobMetadata>(JOB_METADATA_KEY);
+    console.log(this.jobs);
+  }
+
+  getJobsMetadata() {
+    return this.jobs.map((job) => job.meta);
+  }
+
+  async executeJob(name: string, data?: any) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+    if (!(job.discoveredClass.instance instanceof AbstractJob)) {
+      throw new InternalServerErrorException('Job is not an instance of AbstractJob.');
+    }
+    return job.discoveredClass.instance.execute(data || {}, job.meta.name);
+  }
+
+  getJobByName(name: string) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+
+    // Return a Job object with the metadata
+    return {
+      name: job.meta.name,
+      description: job.meta.description,
+    };
+  }
+}
+```
+
+##### 7.2.7.4 Modifying the `app.module.ts` file to make ConfigModule available globally
+
+- We are going to modify the `app.module.ts` file to make ConfigModule available globally.
+
+> apps/jobs/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { JobsModule } from './jobs/jobs.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+
+@Module({
+  imports: [
+-   ConfigModule,
++   ConfigModule.forRoot({
++     isGlobal: true,
++   }),
+    JobsModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
+    }),
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+##### 7.2.7.5 Modifying the `fibonacci.job.ts` file to use the Pulsar client
+
+- We are going to modify the `fibonacci.job.ts` file to use the Pulsar client.
+
+> apps/jobs/src/app/jobs/fibonacci/fibonacci.job.ts
+
+```diff
+import { PulsarClient } from '@jobber/pulsar';
+import { Job } from '../../decorators/job.decorator';
+import { AbstractJob } from '../abstract.job';
+
+@Job({
+  name: 'Fibonacci',
+  description: 'Generate a Fibonacci sequence and store it in the DB.',
+})
+export class FibonacciJob extends AbstractJob {
++ constructor(pulsarClient: PulsarClient) {
++   super(pulsarClient);
++ }
+}
+```
+
+##### 7.2.7.6 Modifying the `jobs.resolver.ts` file to use the Pulsar client
+
+- We are going to modify the `jobs.resolver.ts` file to use the Pulsar client.
+
+> apps/jobs/src/app/jobs/jobs.resolver.ts
+
+```diff
+import { Mutation, Args, Query, Resolver } from '@nestjs/graphql';
+import { JobsService } from './jobs.service';
+import { Job } from './models/job.model';
+import { ExecuteJobInput } from './dto/execute-job.input';
+import { GqlAuthGuard } from '@jobber/nestjs';
+import { UseGuards } from '@nestjs/common';
+
+@Resolver()
+export class JobsResolver {
+  constructor(private readonly jobsService: JobsService) {}
+
+  @Query(() => [Job], { name: 'jobsMetadata' })
+  @UseGuards(GqlAuthGuard)
+  async getJobsMetadata() {
+    return this.jobsService.getJobsMetadata();
+  }
+
+  @Mutation(() => Job)
+  @UseGuards(GqlAuthGuard)
+  async executeJob(@Args('executeJobInput') executeJobInput: ExecuteJobInput) {
+-   return this.jobsService.executeJob(executeJobInput.name);
++   await this.jobsService.executeJob(executeJobInput.name, executeJobInput?.data);
+
++   // Return a Job object to satisfy the GraphQL schema
++   const job = this.jobsService.getJobByName(executeJobInput.name);
++   return job;
+  }
+}
+```
+
+##### 7.2.7.7 Modifying the `execute-job.input.ts` file to use the `data` field
+
+- We need to install the `graphql-type-json` package to use the `data` field.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i graphql-type-json --legacy-peer-deps
+
+added 1 package, removed 1 package, and audited 1344 packages in 2s
+
+226 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+```
+
+- We are going to modify the `execute-job.input.ts` file to use the `data` field.
+
+> apps/jobs/src/app/jobs/dto/execute-job.input.ts
+
+```diff
+import { Field, InputType } from '@nestjs/graphql';
+import { IsNotEmpty, IsOptional } from 'class-validator';
++ import GraphQLJSON from 'graphql-type-json';
+
+@InputType()
+export class ExecuteJobInput {
+  @Field()
+  @IsNotEmpty()
+  name: string;
+
++ @Field(() => GraphQLJSON, { nullable: true })
++ @IsOptional()
++ data?: Record<string, any>;
+}
+```
+
+##### 7.2.7.8 Testing the Pulsar job executor
+
+- We are going to test the Pulsar job executor by executing the `Fibonacci` job using the `job.http` file .
+
+> apps/jobs/job.http
+
+```http
+### Execute job with valid name
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci"}) {
+    name
+  }
+}
+```
+
+- We can see this reponse:
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 45
+ETag: W/"2d-wQABZaZuEWdkap9GXaLdYq62qH4"
+Date: Wed, 12 Mar 2025 17:53:29 GMT
+Connection: close
+
+{
+  "data": {
+    "executeJob": {
+      "name": "Fibonacci"
+    }
+  }
+}
+```
+
+##### 7.2.7.9 Getting the information about the job inside the Docker container
+
+- Then we can get the information about the job inside the Docker container using the following command:
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ docker ps
+CONTAINER ID   IMAGE                 COMMAND                  CREATED       STATUS       PORTS                                       NAMES
+12c69c8ec0b7   postgres              "docker-entrypoint.s…"   3 hours ago   Up 3 hours   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   nestjs-microservices-build-a-distributed-job-engine_postgres_1
+83a812889ec5   apachepulsar/pulsar   "/pulsar/bin/pulsar …"   3 hours ago   Up 3 hours   0.0.0.0:6650->6650/tcp, :::6650->6650/tcp   nestjs-microservices-build-a-distributed-job-engine_pulsar_1
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ docker exec -it 83a812889ec5 /bin/bash
+83a812889ec5:/pulsar$ bin/pulsar-admin topics list public/default
+persistent://public/default/Fibonacci
+83a812889ec5:/pulsar$ bin/pulsar-admin topics stats persistent://public/default/Fibonacci
+{
+  "msgRateIn" : 0.13807601637585476,
+  "msgThroughputIn" : 6.627648786041028,
+  "msgRateOut" : 0.0,
+  "msgThroughputOut" : 0.0,
+  "bytesInCounter" : 48,
+  "msgInCounter" : 1,
+  "systemTopicBytesInCounter" : 0,
+  "bytesOutCounter" : 0,
+  "msgOutCounter" : 0,
+  "bytesOutInternalCounter" : 0,
+  "averageMsgSize" : 47.99999999999999,
+  "msgChunkPublished" : false,
+  "storageSize" : 48,
+  "backlogSize" : 0,
+  "backlogQuotaLimitSize" : 10737418240,
+  "backlogQuotaLimitTime" : -1,
+  "oldestBacklogMessageAgeSeconds" : -1,
+  "publishRateLimitedTimes" : 0,
+  "earliestMsgPublishTimeInBacklogs" : 0,
+  "offloadedStorageSize" : 0,
+  "lastOffloadLedgerId" : 0,
+  "lastOffloadSuccessTimeStamp" : 0,
+  "lastOffloadFailureTimeStamp" : 0,
+  "ongoingTxnCount" : 0,
+  "abortedTxnCount" : 0,
+  "committedTxnCount" : 0,
+  "publishers" : [ {
+    "accessMode" : "Shared",
+    "msgRateIn" : 0.13807601637585476,
+    "msgThroughputIn" : 6.627648786041028,
+    "averageMsgSize" : 48.0,
+    "chunkedMessageRate" : 0.0,
+    "producerId" : 0,
+    "supportsPartialProducer" : false,
+    "producerName" : "standalone-19-0",
+    "address" : "/172.18.0.1:58912",
+    "connectedSince" : "2025-03-13T05:19:16.073608322Z",
+    "clientVersion" : "Pulsar-CPP-v3.7.0",
+    "metadata" : { }
+  } ],
+  "waitingPublishers" : 0,
+  "subscriptions" : { },
+  "replication" : { },
+  "deduplicationStatus" : "Disabled",
+  "nonContiguousDeletedMessagesRanges" : 0,
+  "nonContiguousDeletedMessagesRangesSerializedSize" : 0,
+  "delayedMessageIndexSizeInBytes" : 0,
+  "compaction" : {
+    "lastCompactionRemovedEventCount" : 0,
+    "lastCompactionSucceedTimestamp" : 0,
+    "lastCompactionFailedTimestamp" : 0,
+    "lastCompactionDurationTimeInMills" : 0
+  },
+  "ownerBroker" : "localhost:8080"
+}
+```
