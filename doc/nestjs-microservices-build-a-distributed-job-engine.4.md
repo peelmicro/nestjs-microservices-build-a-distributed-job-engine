@@ -597,3 +597,89 @@ persistent://public/default/Fibonacci
   "ownerBroker" : "localhost:8080"
 }
 ```
+
+### 7.3 Implementing the `Abstract Consumer`
+
+#### 7.3.1 Creating the `pulsar.consumer.ts` file
+
+##### 7.3.1.1 Creating the `serializer` file
+
+- We are going to create the `serializer` file needed to implement the `Abstract Consumer`.
+
+> libs/pulsar/src/lib/serializer.ts
+
+```ts
+export const serialize = <T>(data: T): Buffer => {
+  return Buffer.from(JSON.stringify(data));
+};
+
+export const deserialize = <T>(data: Buffer): T => {
+  return JSON.parse(data.toString());
+};
+```
+
+##### 7.3.1.2 Creating the definition of used messages
+
+- We are going to create the some message classes that will be used to communicate between the job engine and the job executor.
+
+> libs/pulsar/src/lib/messages/job.message.ts
+
+```ts
+export class JobMessage {
+  jobId: number | undefined;
+}
+```
+
+> libs/pulsar/src/lib/messages/fibonacci.message.ts
+
+```ts
+import { IsNotEmpty, IsNumber } from 'class-validator';
+import { JobMessage } from './job.message';
+
+export class FibonacciMessage extends JobMessage {
+  @IsNumber()
+  @IsNotEmpty()
+  iterations: number | undefined;
+}
+```
+
+##### 7.3.1.3 Creating the `pulsar.consumer.ts` file
+
+- We are going to create the `pulsar.consumer.ts` file to implement the `Abstract Consumer`.
+
+> libs/pulsar/src/lib/pulsar.consumer.ts
+
+```ts
+import { Consumer, Message } from 'pulsar-client';
+import { PulsarClient } from './pulsar.client';
+import { deserialize } from './serializer';
+import { Logger } from '@nestjs/common';
+
+export abstract class PulsarConsumer<T> {
+  private consumer!: Consumer;
+  protected readonly logger = new Logger(this.topic);
+
+  constructor(
+    private readonly pulsarClient: PulsarClient,
+    private readonly topic: string,
+  ) {}
+
+  async onModuleInit() {
+    this.consumer = await this.pulsarClient.createConsumer(this.topic, this.listener.bind(this));
+  }
+
+  private async listener(message: Message) {
+    try {
+      const data = deserialize<T>(message.getData());
+      this.logger.debug(`Received message: ${JSON.stringify(data)}`);
+      await this.onMessage(data);
+    } catch (err) {
+      this.logger.error(err);
+    } finally {
+      await this.consumer.acknowledge(message);
+    }
+  }
+
+  protected abstract onMessage(data: T): Promise<void>;
+}
+```
