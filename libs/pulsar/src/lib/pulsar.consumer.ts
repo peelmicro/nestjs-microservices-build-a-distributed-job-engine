@@ -22,7 +22,7 @@ export abstract class PulsarConsumer<T> {
   private async listener(message: Message) {
     try {
       const data = deserialize<T>(message.getData());
-      this.logger.debug(`Received message: ${JSON.stringify(data)}`);
+      this.logger.debug(`Received message: ${JSON.stringify(data, null, 2)}`);
       await this.onMessage(data);
     } catch (err) {
       this.logger.error(err);

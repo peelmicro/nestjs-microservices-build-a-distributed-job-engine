@@ -4,5 +4,5 @@ import { JobMessage } from './job.message';
 export class FibonacciMessage extends JobMessage {
   @IsNumber()
   @IsNotEmpty()
-  iterations: number;
+  iterations: number | undefined;
 }

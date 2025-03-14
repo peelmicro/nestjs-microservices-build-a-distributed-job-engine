@@ -50,7 +50,7 @@ Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 mutation {
-  executeJob(executeJobInput: {name: "Fibonacci"}) {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iterations: 40}}) {
     name
   }
 }
