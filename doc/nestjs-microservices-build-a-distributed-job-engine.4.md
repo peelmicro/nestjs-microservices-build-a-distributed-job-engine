@@ -1449,3 +1449,160 @@ mutation {
   "ms": 1
 }
 ```
+
+#### 8.5 Validating the Job entry
+
+- We are going to validate the job entry to ensure that the data is valid.
+
+##### 8.5.1 Updating the `FibonacciData` message
+
+- We need to transform the `FibonacciData` interface into a class to use the `class-validator` decorators.
+
+> apps/jobs/src/app/jobs/fibonacci/fibonacci-data.message.ts
+
+```ts
+import { IsNumber, IsNotEmpty } from 'class-validator';
+
+export class FibonacciData {
+  @IsNumber()
+  @IsNotEmpty()
+  iterations: number;
+}
+```
+
+##### 8.5.2 Updating the `AbstractJob` class to add the `validateData` method
+
+- We need to update the `AbstractJob` class to add the `validateData` method to validate the job data.
+
+> apps/jobs/src/app/jobs/abstract.job.ts
+
+```ts
+import { Producer } from 'pulsar-client';
+import { PulsarClient, serialize } from '@jobber/pulsar';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
+export abstract class AbstractJob<T extends object> {
+  private producer: Producer;
+  protected abstract messageClass: new () => T;
+
+  constructor(private readonly pulsarClient: PulsarClient) {}
+
+  async execute(data: T, name: string) {
+    await this.validateData(data);
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    await this.producer.send({ data: serialize(data) });
+  }
+
+  private async validateData(data: T) {
+    const errors = await validate(plainToInstance(this.messageClass, data));
+    if (errors.length) {
+      throw new BadRequestException(`Job data is invalid: ${JSON.stringify(errors, null, 2)}`);
+    }
+  }
+}
+```
+
+##### 8.5.3 Modifying the `FibonacciJob` to add the `messageClass` property
+
+- We are going to modify the `FibonacciJob` to add the `messageClass` property.
+
+> apps/jobs/src/app/jobs/fibonacci/fibonacci.job.ts
+
+```ts
+import { PulsarClient } from '@jobber/pulsar';
+import { Job } from '../../decorators/job.decorator';
+import { AbstractJob } from '../abstract.job';
+import { FibonacciData } from './fibonacci-data.message';
+@Job({
+  name: 'Fibonacci',
+  description: 'Generate a Fibonacci sequence and store it in the DB.',
+})
+export class FibonacciJob extends AbstractJob<FibonacciData> {
+  protected messageClass = FibonacciData;
+  constructor(pulsarClient: PulsarClient) {
+    super(pulsarClient);
+  }
+}
+```
+
+##### 8.5.4 Modifying the `job.http` file to execute the job with invalid data
+
+- We are going to test the `FibonacciJob` to ensure that the job data is validated.
+
+```http
+### Execute job with invalid data
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iteration: 40}}) {
+    name
+  }
+}
+```
+
+- We are going to execute the `### Execute job with invalid data` mutation using the `job.http` file.
+- We can see the result in the logs of the `executor` microservice.
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 2242
+ETag: W/"8c2-2tlSJgLZLGny1Pa2noVOsg+Dp0M"
+Date: Fri, 14 Mar 2025 14:41:50 GMT
+Connection: close
+
+{
+  "errors": [
+    {
+      "message": "Job data is invalid: [\n  {\n    \"target\": {\n      \"iteration\": 40\n    },\n    \"property\": \"iterations\",\n    \"children\": [],\n    \"constraints\": {\n      \"isNotEmpty\": \"iterations should not be empty\",\n      \"isNumber\": \"iterations must be a number conforming to the specified constraints\"\n    }\n  }\n]",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "executeJob"
+      ],
+      "extensions": {
+        "code": "BAD_REQUEST",
+        "stacktrace": [
+          "BadRequestException: Job data is invalid: [",
+          "  {",
+          "    \"target\": {",
+          "      \"iteration\": 40",
+          "    },",
+          "    \"property\": \"iterations\",",
+          "    \"children\": [],",
+          "    \"constraints\": {",
+          "      \"isNotEmpty\": \"iterations should not be empty\",",
+          "      \"isNumber\": \"iterations must be a number conforming to the specified constraints\"",
+          "    }",
+          "  }",
+          "]",
+          "    at FibonacciJob.validateData (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/jobs/webpack:/src/app/jobs/abstract.job.ts:23:13)",
+          "    at processTicksAndRejections (node:internal/process/task_queues:96:5)",
+          "    at FibonacciJob.execute (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/jobs/webpack:/src/app/jobs/abstract.job.ts:13:5)",
+          "    at JobsResolver.executeJob (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/jobs/webpack:/src/app/jobs.resolver.ts:21:5)",
+          "    at target (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/helpers/external-context-creator.js:74:28)",
+          "    at Object.executeJob (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/helpers/external-proxy.js:9:24)"
+        ],
+        "originalError": {
+          "message": "Job data is invalid: [\n  {\n    \"target\": {\n      \"iteration\": 40\n    },\n    \"property\": \"iterations\",\n    \"children\": [],\n    \"constraints\": {\n      \"isNotEmpty\": \"iterations should not be empty\",\n      \"isNumber\": \"iterations must be a number conforming to the specified constraints\"\n    }\n  }\n]",
+          "error": "Bad Request",
+          "statusCode": 400
+        }
+      }
+    }
+  ],
+  "data": null
+}
+```

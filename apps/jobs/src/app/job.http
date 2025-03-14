@@ -54,3 +54,15 @@ mutation {
     name
   }
 }
+
+### Execute job with invalid data
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iteration: 40}}) {
+    name
+  }
+}
