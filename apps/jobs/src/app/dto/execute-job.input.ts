@@ -10,5 +10,5 @@ export class ExecuteJobInput {
 
   @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
-  data?: Record<string, any>;
+  data?: Record<string, any> | Record<string, any>[];
 }

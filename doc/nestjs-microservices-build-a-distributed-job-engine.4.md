@@ -1606,3 +1606,352 @@ Connection: close
   "data": null
 }
 ```
+
+#### 8.6 Creating a Pulsar Batch Producer
+
+- Pulsar supports message compression to reduce size and batching to send multiple messages in a single request, improving efficiency. Batch index acknowledgment prevents redelivery of acknowledged messages within a batch.
+- Message chunking allows Pulsar to handle large messages by splitting them into smaller chunks, which are then reassembled at the consumer side.
+
+##### 8.6.1 Modifying the `ExecuteJonInput` to convert the `data` property into a `data` array property
+
+- We are going to modify the `ExecuteJonInput` to convert the `data` property into a `data` array property.
+
+> apps/jobs/src/app/jobs/execute-job.input.ts
+
+```ts
+import { Field, InputType } from '@nestjs/graphql';
+import { IsNotEmpty, IsOptional } from 'class-validator';
+import GraphQLJSON from 'graphql-type-json';
+
+@InputType()
+export class ExecuteJobInput {
+  @Field()
+  @IsNotEmpty()
+  name: string;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  @IsOptional()
+  data?: Record<string, any> | Record<string, any>[];
+}
+```
+
+##### 8.6.2 Modifying the `AbstractJob` to send multiple messages in a single request
+
+- We are going to modify the `AbstractJob` to send multiple messages in a single request.
+
+> apps/jobs/src/app/jobs/abstract.job.ts
+
+```ts
+import { Producer } from 'pulsar-client';
+import { PulsarClient, serialize } from '@jobber/pulsar';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
+export abstract class AbstractJob<T extends object> {
+  private producer: Producer;
+  protected abstract messageClass: new () => T;
+
+  constructor(private readonly pulsarClient: PulsarClient) {}
+
+  async execute(data: T, name: string) {
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    if (Array.isArray(data)) {
+      for (const message of data) {
+        await this.send(message);
+      }
+      return;
+    }
+    await this.send(data);
+  }
+
+  private async send(data: T) {
+    await this.validateData(data);
+    await this.producer.send({ data: serialize(data) });
+  }
+
+  private async validateData(data: T) {
+    const errors = await validate(plainToInstance(this.messageClass, data));
+    if (errors.length) {
+      throw new BadRequestException(`Job data is invalid: ${JSON.stringify(errors, null, 2)}`);
+    }
+  }
+}
+```
+
+##### 8.6.3 Modifying the `job.http` file to execute the job with multiple messages
+
+- We are going to test the `FibonacciJob` to ensure that the job data is validated.
+
+```http
+### Execute job with multiple messages
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: [{iterations: 40}, {iterations: 41}]}) {
+    name
+  }
+}
+```
+
+- We are going to execute the `### Execute job with multiple messages` mutation using the `job.http` file.
+- We can see the result in the logs of the `executor` microservice.
+
+```json
+[Nest] 127011  - 15/03/2025, 10:45:45   DEBUG [Fibonacci] Received message: {
+  "iterations": 40
+}
+[Nest] 127011  - 15/03/2025, 10:45:45     LOG [Fibonacci] FibonacciConsumer: Result: {
+  "number": "102334155",
+  "length": 9,
+  "iterations": "40",
+  "ms": 0
+}
+[Nest] 127011  - 15/03/2025, 10:45:45   DEBUG [Fibonacci] Received message: {
+  "iterations": 41
+}
+[Nest] 127011  - 15/03/2025, 10:45:45     LOG [Fibonacci] FibonacciConsumer: Result: {
+  "number": "165580141",
+  "length": 9,
+  "iterations": "41",
+  "ms": 1
+}
+```
+
+##### 8.6.4 Creating Backlog Test Script
+
+- We are going to create a test script to test the backlog feature.
+
+> scripts/fibonacci.mjs
+
+```js
+import { Producer } from 'pulsar-client';
+import { PulsarClient, serialize } from '@jobber/pulsar';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
+export abstract class AbstractJob<T extends object> {
+  private producer: Producer;
+  protected abstract messageClass: new () => T;
+
+  constructor(private readonly pulsarClient: PulsarClient) {}
+
+  async execute(data: T, name: string) {
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    if (Array.isArray(data)) {
+      for (const message of data) {
+        await this.send(message);
+      }
+      return;
+    }
+    await this.send(data);
+  }
+
+  private async send(data: T) {
+    await this.validateData(data);
+    await this.producer.send({ data: serialize(data) });
+  }
+
+  private async validateData(data: T) {
+    const errors = await validate(plainToInstance(this.messageClass, data));
+    if (errors.length) {
+      throw new BadRequestException(
+        `Job data is invalid: ${JSON.stringify(errors, null, 2)}`,
+      );
+    }
+  }
+}
+```
+
+##### 8.6.5 Running the Backlog Test Script
+
+- We are going to run the backlog test script.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/scripts$ nvm use --lts
+Now using node v22.13.0 (npm v10.9.2)
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/scripts$ node ./fibonacci.mjs
+Command line arguments: [
+  '/home/juanpabloperez/.nvm/versions/node/v22.13.0/bin/node',
+  '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/scripts/fibonacci.mjs'
+]
+Executing Fibonacci with n = 1000
+{ data: { executeJob: { name: 'Fibonacci' } } }
+```
+
+- We can see the result in the logs of the `executor` microservice.
+
+```bash
+.
+[Nest] 127011  - 15/03/2025, 11:26:00   DEBUG [Fibonacci] Received message: {
+  "iterations": 1426
+}
+[Nest] 127011  - 15/03/2025, 11:26:00     LOG [Fibonacci] FibonacciConsumer: Result: {
+  "number": "4643976295738910422782284314065068453793584638755326395700934561957574291597816213807062336695384839760502199019030434245092888600854131835376621590138445911467175656089921622533698591501454932822440811745532167720317101247893453436522997270972458827078034544593550904048414169482938822744045478343",
+  "length": 298,
+  "iterations": "1426",
+  "ms": 31
+}
+[Nest] 127011  - 15/03/2025, 11:26:00   DEBUG [Fibonacci] Received message: {
+  "iterations": 4662
+}
+[Nest] 127011  - 15/03/2025, 11:26:01     LOG [Fibonacci] FibonacciConsumer: Result: {
+  "number": "89308715530134075204973169182901383637803863472380837549546464510271709954429756153597087495605497822946632873381160723610813423051830673651040396940492049974301809187123803527677848571775313874710414138842277295762942003491874230672605537113553630388414940622753615782645014263109029692790722824852569093620222495873670960486096078298107566926240583428171548607440211894530564394573280156973065628778560932167386640419918715080831449224041742184645106682383027154848561592135429942740838119240224939542251846310104096249031326078855997149809229329512913467156721117883756255888043410851530718734100912473191977752809370717870284031608782689873341108569349862590173309223088961799660802447336512648339319294819880579612045484395229615122516747300559895046953367576977746041193433255927298665358362516691418486358622443871667414333070517900750899368700219399982554161257639604602704356216983752967302620454450229052377062765100685489545077505596221550259809140404477142058056",
+  "length": 974,
+  "iterations": "4662",
+  "ms": 944
+}
+[Nest] 127011  - 15/03/2025, 11:26:01   DEBUG [Fibonacci] Received message: {
+  "iterations": 1522
+}
+[Nest] 127011  - 15/03/2025, 11:26:01     LOG [Fibonacci] FibonacciConsumer: Result: {
+  "number": "536665229509930305516435493690261399644008263574964799625998816596067675953697541716070408820450005837389287429424462202974743071734866779304500926844533663388129871733354690183056905053510685804989877208635300941462435654323041477198237713963127114291296038855302258224421271892802153898133413075897669785330290264711",
+  "length": 318,
+  "iterations": "1522",
+  "ms": 37
+}
+```
+
+##### 8.6.7 We can access the backlog of messages in Docker Image
+
+- We can access the backlog of messages in the `pulsar-admin` tool.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ docker ps
+CONTAINER ID   IMAGE                 COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+65c17a33581d   postgres              "docker-entrypoint.s…"   40 minutes ago   Up 40 minutes   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   nestjs-microservices-build-a-distributed-job-engine_postgres_1
+8d70d097fca0   apachepulsar/pulsar   "/pulsar/bin/pulsar …"   40 minutes ago   Up 40 minutes   0.0.0.0:6650->6650/tcp, :::6650->6650/tcp   nestjs-microservices-build-a-distributed-job-engine_pulsar_1
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ docker exec -it 8d70d097fca0 /bin/bash
+8d70d097fca0:/pulsar/bin$ ./pulsar-admin topics stats persistent://public/default/Fibonacci
+{
+  "msgRateIn" : 0.0,
+  "msgThroughputIn" : 0.0,
+  "msgRateOut" : 0.0,
+  "msgThroughputOut" : 0.0,
+  "bytesInCounter" : 64869,
+  "msgInCounter" : 1003,
+  "systemTopicBytesInCounter" : 0,
+  "bytesOutCounter" : 64869,
+  "msgOutCounter" : 1003,
+  "bytesOutInternalCounter" : 0,
+  "averageMsgSize" : 0.0,
+  "msgChunkPublished" : false,
+  "storageSize" : 64869,
+  "backlogSize" : 0,
+  "backlogQuotaLimitSize" : 10737418240,
+  "backlogQuotaLimitTime" : -1,
+  "oldestBacklogMessageAgeSeconds" : -1,
+  "publishRateLimitedTimes" : 0,
+  "earliestMsgPublishTimeInBacklogs" : 0,
+  "offloadedStorageSize" : 0,
+  "lastOffloadLedgerId" : 0,
+  "lastOffloadSuccessTimeStamp" : 0,
+  "lastOffloadFailureTimeStamp" : 0,
+  "ongoingTxnCount" : 0,
+  "abortedTxnCount" : 0,
+  "committedTxnCount" : 0,
+  "publishers" : [ {
+    "accessMode" : "Shared",
+    "msgRateIn" : 0.0,
+    "msgThroughputIn" : 0.0,
+    "averageMsgSize" : 0.0,
+    "chunkedMessageRate" : 0.0,
+    "producerId" : 0,
+    "supportsPartialProducer" : false,
+    "producerName" : "standalone-0-0",
+    "address" : "/172.18.0.1:53084",
+    "connectedSince" : "2025-03-15T10:45:39.094373691Z",
+    "clientVersion" : "Pulsar-CPP-v3.7.0",
+    "metadata" : { }
+  } ],
+  "waitingPublishers" : 0,
+  "subscriptions" : {
+    "jobber" : {
+      "msgRateOut" : 0.0,
+      "msgThroughputOut" : 0.0,
+      "bytesOutCounter" : 64869,
+      "msgOutCounter" : 1003,
+      "msgRateRedeliver" : 0.0,
+      "messageAckRate" : 2.150000646290194,
+      "chunkedMessageRate" : 0.0,
+      "msgBacklog" : 0,
+      "backlogSize" : 0,
+      "earliestMsgPublishTimeInBacklog" : 0,
+      "msgBacklogNoDelayed" : 0,
+      "blockedSubscriptionOnUnackedMsgs" : false,
+      "msgDelayed" : 0,
+      "msgInReplay" : 0,
+      "unackedMessages" : 0,
+      "type" : "Shared",
+      "msgRateExpired" : 0.0,
+      "totalMsgExpired" : 0,
+      "lastExpireTimestamp" : 0,
+      "lastConsumedFlowTimestamp" : 1742037960938,
+      "lastConsumedTimestamp" : 1742037794587,
+      "lastAckedTimestamp" : 1742037961959,
+      "lastMarkDeleteAdvancedTimestamp" : 1742037961959,
+      "consumers" : [ {
+        "msgRateOut" : 0.0,
+        "msgThroughputOut" : 0.0,
+        "bytesOutCounter" : 64869,
+        "msgOutCounter" : 1003,
+        "msgRateRedeliver" : 0.0,
+        "messageAckRate" : 2.150000646290194,
+        "chunkedMessageRate" : 0.0,
+        "consumerName" : "39f7627a84",
+        "availablePermits" : 997,
+        "unackedMessages" : 0,
+        "avgMessagesPerEntry" : 1,
+        "blockedConsumerOnUnackedMsgs" : false,
+        "drainingHashesCount" : 0,
+        "drainingHashesClearedTotal" : 0,
+        "drainingHashesUnackedMessages" : 0,
+        "address" : "/172.18.0.1:59216",
+        "connectedSince" : "2025-03-15T10:44:20.114391412Z",
+        "clientVersion" : "Pulsar-CPP-v3.7.0",
+        "lastAckedTimestamp" : 1742037961959,
+        "lastConsumedTimestamp" : 1742037794587,
+        "lastConsumedFlowTimestamp" : 1742037960938,
+        "metadata" : { },
+        "lastAckedTime" : "2025-03-15T11:26:01.959Z",
+        "lastConsumedTime" : "2025-03-15T11:23:14.587Z"
+      } ],
+      "isDurable" : true,
+      "isReplicated" : false,
+      "allowOutOfOrderDelivery" : false,
+      "consumersAfterMarkDeletePosition" : { },
+      "drainingHashesCount" : 0,
+      "drainingHashesClearedTotal" : 0,
+      "drainingHashesUnackedMessages" : 0,
+      "nonContiguousDeletedMessagesRanges" : 0,
+      "nonContiguousDeletedMessagesRangesSerializedSize" : 0,
+      "delayedMessageIndexSizeInBytes" : 0,
+      "subscriptionProperties" : { },
+      "filterProcessedMsgCount" : 0,
+      "filterAcceptedMsgCount" : 0,
+      "filterRejectedMsgCount" : 0,
+      "filterRescheduledMsgCount" : 0,
+      "durable" : true,
+      "replicated" : false
+    }
+  },
+  "replication" : { },
+  "deduplicationStatus" : "Disabled",
+  "nonContiguousDeletedMessagesRanges" : 0,
+  "nonContiguousDeletedMessagesRangesSerializedSize" : 0,
+  "delayedMessageIndexSizeInBytes" : 0,
+  "compaction" : {
+    "lastCompactionRemovedEventCount" : 0,
+    "lastCompactionSucceedTimestamp" : 0,
+    "lastCompactionFailedTimestamp" : 0,
+    "lastCompactionDurationTimeInMills" : 0
+  },
+  "ownerBroker" : "localhost:8080"
+}
+```
