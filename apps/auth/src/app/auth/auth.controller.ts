@@ -4,12 +4,12 @@ import { Observable } from 'rxjs';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersService } from '../users/users.service';
 import { TokenPayload } from './token-payload.interface';
-import { AuthServiceControllerMethods } from 'types/proto/auth';
 import {
+  AuthServiceControllerMethods,
   AuthenticateRequest,
   AuthServiceController,
   User,
-} from 'types/proto/auth';
+} from '@jobber/grpc';
 
 @Controller()
 @AuthServiceControllerMethods()

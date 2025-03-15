@@ -1,0 +1,7 @@
+{
+  "name": "@jobber/jobs",
+  "version": "0.0.0",
+  "dependencies": {
+    "graphql-type-json": "^0.3.2"
+  }
+}

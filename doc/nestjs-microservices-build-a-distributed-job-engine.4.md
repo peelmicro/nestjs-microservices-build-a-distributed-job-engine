@@ -684,9 +684,9 @@ export abstract class PulsarConsumer<T> {
 }
 ```
 
-### 8 Creating the `Job Executor`
+## 8 Creating the `Job Executor`
 
-#### 8.1 Creating the `Job Executor` microservice
+### 8.1 Creating the `Job Executor` microservice
 
 - We are going to create the `Job Executor` microservice to implement the `Abstract Consumer`.
 - We are going to use `Nx` to create the `Job Executor` microservice.
@@ -730,7 +730,7 @@ Run "nx show project executor-e2e" to view details about this project.
 Run "nx show project executor" to view details about this project.
 ```
 
-#### 8.2 Creating an `init` file for all the microservices to be used in the `main.ts` file
+### 8.2 Creating an `init` file for all the microservices to be used in the `main.ts` file
 
 - We are going to create a `init` file for all the microservices.
 
@@ -816,14 +816,14 @@ async function bootstrap() {
 bootstrap();
 ```
 
-#### 8.3 Creating the `jobs` module in the `executor` microservice
+### 8.3 Creating the `jobs` module in the `executor` microservice
 
-##### 8.3.1 Cleaning the `executor` microservice
+#### 8.3.1 Cleaning the `executor` microservice
 
 - We are going to remove the `app.controller.ts`, `app.service.ts`, `app.controller.spec.ts` and `app.module.ts` files.
 - We are going to remove those files from the app.module.ts file.
 
-##### 8.3.2 Creating the `FibonacciConsumer` consumer to ensure that when a message is created with the jobs topic, the consumer is notified
+#### 8.3.2 Creating the `FibonacciConsumer` consumer to ensure that when a message is created with the jobs topic, the consumer is notified
 
 > apps/executor/src/app/jobs/fibonacci/fibonacci.consumer.ts
 
@@ -846,7 +846,7 @@ export class FibonacciConsumer extends PulsarConsumer<FibonacciMessage> implemen
 }
 ```
 
-##### 8.3.3 Updating the `jobs` module to have all the job consumers
+#### 8.3.3 Updating the `jobs` module to have all the job consumers
 
 - We are going to update the `jobs` module to have all the job consumers.
 
@@ -864,7 +864,7 @@ import { FibonacciConsumer } from './fibonacci/fibonacci.consumer';
 export class JobsModule {}
 ```
 
-##### 8.3.4 Updating the `app.module.ts` file to have the `jobs` module
+#### 8.3.4 Updating the `app.module.ts` file to have the `jobs` module
 
 - We are going to update the `app.module.ts` file to have the `jobs` module.
 
@@ -881,7 +881,7 @@ import { ConfigModule } from '@nestjs/config';
 export class AppModule {}
 ```
 
-##### 8.3.5 Creating the `.env` file in the `executor` microservice
+#### 8.3.5 Creating the `.env` file in the `executor` microservice
 
 - We are going to create the `.env` file in the `executor` microservice.
 
@@ -892,7 +892,7 @@ PORT=3002
 PULSAR_SERVICE_URL=pulsar://localhost:6650
 ```
 
-##### 8.3.6 Testing the `executor` microservice
+#### 8.3.6 Testing the `executor` microservice
 
 - We are going to test the `executor` microservice to ensure that when a message is created with the jobs topic, the consumer is notified.
 - We need to modify the main `package.json` file to update the `serve:all` and `build:all` scripts to include the `executor` microservice.
@@ -1218,9 +1218,9 @@ Connection: close
 [Nest] 1100294  - 13/03/2025, 17:50:59     LOG [FibonacciConsumer] FibonacciConsumer: Received message: {}
 ```
 
-#### 8.4 Managing Serialization and Error Handling
+### 8.4 Managing Serialization and Error Handling
 
-##### 8.4.1 Installing the `msgpackr` package
+#### 8.4.1 Installing the `msgpackr` package
 
 - We need to install the `msgpackr` package to serialize and deserialize the job data that will include all the types inside the `job.data` field.
 
@@ -1240,7 +1240,7 @@ To address all issues, run:
 Run `npm audit` for details.
 ```
 
-##### 8.4.2 Creating the `Serializer` methods
+#### 8.4.2 Creating the `Serializer` methods
 
 - We are going to create the `Serializer` methods to serialize and deserialize the job data.
 
@@ -1278,7 +1278,7 @@ export const deserialize = <T>(buffer: Buffer): T => {
 };
 ```
 
-##### 8.4.3 Updating the `AbstractJob` to use the `Serializer` methods
+#### 8.4.3 Updating the `AbstractJob` to use the `Serializer` methods
 
 - We are going to update the `AbstractJob` to use the `Serializer` methods to serialize and deserialize the job data.
 
@@ -1302,7 +1302,7 @@ export abstract class AbstractJob<T> {
 }
 ```
 
-##### 8.4.4 Installing the `fibonacci` package
+#### 8.4.4 Installing the `fibonacci` package
 
 - We are going to install the `fibonacci` package to use it as part of the `fibonacci` job.
 
@@ -1323,7 +1323,7 @@ To address all issues, run:
 Run `npm audit` for details.
 ```
 
-##### 8.4.5 Updating the `FibonacciConsumer` to use the `fibonacci` package
+#### 8.4.5 Updating the `FibonacciConsumer` to use the `fibonacci` package
 
 - We are going to update the `FibonacciConsumer` to use the `fibonacci` package to generate the Fibonacci sequence.
 
@@ -1347,7 +1347,7 @@ export class FibonacciConsumer extends PulsarConsumer<FibonacciMessage> implemen
 }
 ```
 
-##### 8.4.6 Testing the `FibonacciConsumer`
+#### 8.4.6 Testing the `FibonacciConsumer`
 
 - We are going to test the `FibonacciConsumer` to ensure that the job is working as expected.
 
@@ -1450,11 +1450,11 @@ mutation {
 }
 ```
 
-#### 8.5 Validating the Job entry
+### 8.5 Validating the Job entry
 
 - We are going to validate the job entry to ensure that the data is valid.
 
-##### 8.5.1 Updating the `FibonacciData` message
+#### 8.5.1 Updating the `FibonacciData` message
 
 - We need to transform the `FibonacciData` interface into a class to use the `class-validator` decorators.
 
@@ -1470,7 +1470,7 @@ export class FibonacciData {
 }
 ```
 
-##### 8.5.2 Updating the `AbstractJob` class to add the `validateData` method
+#### 8.5.2 Updating the `AbstractJob` class to add the `validateData` method
 
 - We need to update the `AbstractJob` class to add the `validateData` method to validate the job data.
 
@@ -1505,7 +1505,7 @@ export abstract class AbstractJob<T extends object> {
 }
 ```
 
-##### 8.5.3 Modifying the `FibonacciJob` to add the `messageClass` property
+#### 8.5.3 Modifying the `FibonacciJob` to add the `messageClass` property
 
 - We are going to modify the `FibonacciJob` to add the `messageClass` property.
 
@@ -1528,7 +1528,7 @@ export class FibonacciJob extends AbstractJob<FibonacciData> {
 }
 ```
 
-##### 8.5.4 Modifying the `job.http` file to execute the job with invalid data
+#### 8.5.4 Modifying the `job.http` file to execute the job with invalid data
 
 - We are going to test the `FibonacciJob` to ensure that the job data is validated.
 
@@ -1607,12 +1607,12 @@ Connection: close
 }
 ```
 
-#### 8.6 Creating a Pulsar Batch Producer
+### 8.6 Creating a Pulsar Batch Producer
 
 - Pulsar supports message compression to reduce size and batching to send multiple messages in a single request, improving efficiency. Batch index acknowledgment prevents redelivery of acknowledged messages within a batch.
 - Message chunking allows Pulsar to handle large messages by splitting them into smaller chunks, which are then reassembled at the consumer side.
 
-##### 8.6.1 Modifying the `ExecuteJonInput` to convert the `data` property into a `data` array property
+#### 8.6.1 Modifying the `ExecuteJonInput` to convert the `data` property into a `data` array property
 
 - We are going to modify the `ExecuteJonInput` to convert the `data` property into a `data` array property.
 
@@ -1635,7 +1635,7 @@ export class ExecuteJobInput {
 }
 ```
 
-##### 8.6.2 Modifying the `AbstractJob` to send multiple messages in a single request
+#### 8.6.2 Modifying the `AbstractJob` to send multiple messages in a single request
 
 - We are going to modify the `AbstractJob` to send multiple messages in a single request.
 
@@ -1680,7 +1680,7 @@ export abstract class AbstractJob<T extends object> {
 }
 ```
 
-##### 8.6.3 Modifying the `job.http` file to execute the job with multiple messages
+#### 8.6.3 Modifying the `job.http` file to execute the job with multiple messages
 
 - We are going to test the `FibonacciJob` to ensure that the job data is validated.
 
@@ -1722,7 +1722,7 @@ mutation {
 }
 ```
 
-##### 8.6.4 Creating Backlog Test Script
+#### 8.6.4 Creating Backlog Test Script
 
 - We are going to create a test script to test the backlog feature.
 
@@ -1769,7 +1769,7 @@ export abstract class AbstractJob<T extends object> {
 }
 ```
 
-##### 8.6.5 Running the Backlog Test Script
+#### 8.6.5 Running the Backlog Test Script
 
 - We are going to run the backlog test script.
 
@@ -1818,7 +1818,7 @@ Executing Fibonacci with n = 1000
 }
 ```
 
-##### 8.6.7 We can access the backlog of messages in Docker Image
+#### 8.6.7 We can access the backlog of messages in Docker Image
 
 - We can access the backlog of messages in the `pulsar-admin` tool.
 
