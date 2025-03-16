@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "prepare": "husky",
     "serve:all": "nx run-many -t serve -p auth jobs executor",
     "build:all": "nx run-many -t build -p auth jobs executor"
   },
@@ -26,7 +25,8 @@
     "module-alias": "^2.2.3",
     "msgpackr": "^1.11.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "webpack-merge": "^6.0.1"
   },
   "_moduleAliases": {
     "@jobber/grpc": "dist/libs/grpc/main",
