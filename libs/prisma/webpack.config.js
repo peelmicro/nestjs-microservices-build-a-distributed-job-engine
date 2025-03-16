@@ -4,6 +4,7 @@ const { join } = require('path');
 module.exports = {
   output: {
     path: join(__dirname, '../../dist/libs/prisma'),
+    libraryTarget: 'commonjs2',
   },
   plugins: [
     new NxAppWebpackPlugin({

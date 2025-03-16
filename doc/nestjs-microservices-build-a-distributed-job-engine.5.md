@@ -669,3 +669,425 @@ module.exports = {
   ],
 };
 ```
+
+#### 9.3 Fixing issues when compiling the `libs`
+
+##### 9.3.1. Explaining the issue
+
+- When we try to execute one of the main `apps` from the `dist` folder, we get the following error:
+
+- We are going to fix the issues when compiling the `libs` when we run the `nx build` command.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ node ./dist/apps/auth/main
+node:internal/modules/cjs/loader:1247
+  throw err;
+  ^
+
+Error: Cannot find module '@jobber/graphql'
+Require stack:
+- /home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1244:15)
+    at Function._load (node:internal/modules/cjs/loader:1070:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Module.require (node:internal/modules/cjs/loader:1335:12)
+    at require (node:internal/modules/helpers:136:16)
+    at Object.defineProperty.value (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js:260:18)
+    at __webpack_require__ (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js:818:41)
+    at Array.<anonymous> (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js:234:19)
+    at __webpack_require__ (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js:818:41) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/apps/auth/main.js'
+  ]
+}
+```
+
+- When are compiling locally, the manage of the libs dependencies is made by the use of the `paths` property of the `tsconfig.base.json` file.
+
+> tsconfig.base.json
+
+```json
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@jobber/graphql": ["libs/graphql/src/index.ts"],
+      "@jobber/grpc": ["libs/grpc/src/index.ts"],
+      "@jobber/nestjs": ["libs/nestjs/src/index.ts"],
+      "@jobber/prisma": ["libs/prisma/src/index.ts"],
+      "@jobber/pulsar": ["libs/pulsar/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
+```
+
+- But those aliases are not available to the node executable when we are running it using the `node ./dist/apps/auth/main` command.
+- We need a way to tell the node executable to use the aliases defined in the `tsconfig.base.json` file.
+- We are going to use a npm package called `module-alias` to solve this issue.
+
+##### 9.3.2. Adding the `module-alias` npm package
+
+- We are going to add the `module-alias` npm package.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm i module-alias --legacy-peer-deps
+
+added 1 package, removed 1 package, and audited 1366 packages in 3s
+
+226 packages are looking for funding
+  run `npm fund` for details
+
+2 moderate severity vulnerabilities
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+```
+
+##### 9.3.3. Adding the `module-alias` configuration
+
+- We are going to add the `module-alias` configuration to the main `package.json` file.
+
+> package.json
+
+```json
+.
+  "_moduleAliases": {
+    "@jobber/grpc": "dist/libs/grpc/main",
+    "@jobber/graphql": "dist/libs/graphql/main",
+    "@jobber/pulsar": "dist/libs/pulsar/main",
+    "@jobber/nestjs": "dist/libs/nestjs/main",
+    "@jobber/prisma": "dist/libs/prisma/main"
+  },
+.
+```
+
+##### 9.3.4. Adding the `module-alias` configuration to the `main.ts` files of the `apps` projects
+
+- We are going to add the `module-alias` configuration to the `main.ts` files of the `apps` projects.
+- We are also going to set the proper configuration for the `proto` files.
+
+> apps/auth/src/main.ts
+
+```diff
++import 'module-alias/register';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import { GrpcOptions, Transport } from '@nestjs/microservices';
+import { AUTH_PACKAGE_NAME } from '@jobber/grpc';
+import { join } from 'path';
+import { init } from '@jobber/nestjs';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await init(app);
+  app.connectMicroservice<GrpcOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: AUTH_PACKAGE_NAME,
+-     protoPath: join(__dirname, 'proto', 'auth.proto'),
++     protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+    },
+  });
+  await app.startAllMicroservices();
+}
+
+bootstrap();
+```
+
+> apps/executor/src/main.ts
+
+```diff
++import 'module-alias/register';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import { init } from '@jobber/nestjs';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await init(app);
+}
+
+bootstrap();
+```
+
+> apps/jobs/src/main.ts
+
+```diff
+import 'module-alias/register';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import { init } from '@jobber/nestjs';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await init(app);
+}
+
+bootstrap();
+```
+
+- In this case, we need to update the `protoPath` property in the `jobs.module.ts` file.
+
+> apps/jobs/src/jobs.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { FibonacciJob } from './jobs/fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AUTH_PACKAGE_NAME } from '@jobber/grpc';
+import { join } from 'path';
+import { PulsarModule } from '@jobber/pulsar';
+
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
+    PulsarModule,
+    ClientsModule.register([
+      {
+        name: AUTH_PACKAGE_NAME,
+        transport: Transport.GRPC,
+        options: {
+          package: AUTH_PACKAGE_NAME,
+-         protoPath: join(__dirname, 'proto', 'auth.proto'),
++         protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+        },
+      },
+    ]),
+  ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver],
+})
+export class JobsModule {}
+```
+
+##### 9.3.5. Adding the `commonjs2` configuration to the `webpack.config.js` files of the `libs` projects
+
+- We are going to add the `commonjs2` configuration to the `webpack.config.js` files of the `libs` projects.
+- The `libraryTarget: 'commonjs2'` line specifies how your bundled code will be exported when it's built by webpack.
+- In this case, it's telling webpack to output your library in the CommonJS2 module format, which is the standard format used by Node.js. This means:
+  - Your bundled code will use `module.exports = ...` to export its functionality
+- It's optimized for consumption by Node.js applications or other CommonJS environments
+- Other modules will be able to require/import your library using require('your-library')
+- `CommonJS2` is essentiall`the same as`CommonJS` but specifically refers to the Node.js implementation that uses module.exports instead of just exports.
+- This setting is appropriate for a `GraphQL` library that will be used in a `Node.js` environment, as it ensures compatibility with the `Node.js` module system.
+
+> libs/graphql/webpack.config.js
+
+```diff
+const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
+const { join } = require('path');
+
+module.exports = {
+  output: {
+    path: join(__dirname, '../../dist/libs/graphql'),
++   libraryTarget: 'commonjs2',
+  },
+  plugins: [
+    new NxAppWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/index.ts',
+      tsConfig: './tsconfig.lib.json',
+      optimization: false,
+      outputHashing: 'none',
+      generatePackageJson: true,
+    }),
+  ],
+};
+```
+
+> libs/grpc/webpack.config.js
+
+```diff
+const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
+const { join } = require('path');
+
+module.exports = {
+  output: {
+    path: join(__dirname, '../../dist/libs/grpc'),
++   libraryTarget: 'commonjs2',
+  },
+  plugins: [
+    new NxAppWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/index.ts',
+      tsConfig: './tsconfig.lib.json',
+      optimization: false,
+      outputHashing: 'none',
+      generatePackageJson: true,
+    }),
+  ],
+};
+```
+
+> libs/nestjs/webpack.config.js
+
+```diff
+const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
+const { join } = require('path');
+
+module.exports = {
+  output: {
+    path: join(__dirname, '../../dist/libs/nestjs'),
++   libraryTarget: 'commonjs2',
+  },
+  plugins: [
+    new NxAppWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/index.ts',
+      tsConfig: './tsconfig.lib.json',
+      optimization: false,
+      outputHashing: 'none',
+      generatePackageJson: true,
+    }),
+  ],
+};
+```
+
+> libs/prisma/webpack.config.js
+
+```diff
+const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
+const { join } = require('path');
+
+module.exports = {
+  output: {
+    path: join(__dirname, '../../dist/libs/prisma'),
++   libraryTarget: 'commonjs2',
+  },
+  plugins: [
+    new NxAppWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/index.ts',
+      tsConfig: './tsconfig.lib.json',
+      optimization: false,
+      outputHashing: 'none',
+      generatePackageJson: true,
+    }),
+  ],
+};
+```
+
+> libs/pulsar/webpack.config.js
+
+```diff
+const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
+const { join } = require('path');
+
+module.exports = {
+  output: {
+    path: join(__dirname, '../../dist/libs/pulsar'),
++   libraryTarget: 'commonjs2',
+  },
+  plugins: [
+    new NxAppWebpackPlugin({
+      target: 'node',
+      compiler: 'tsc',
+      main: './src/index.ts',
+      tsConfig: './tsconfig.lib.json',
+      optimization: false,
+      outputHashing: 'none',
+      generatePackageJson: true,
+    }),
+  ],
+};
+```
+
+##### 9.3.6. Ensuring that everything is working
+
+- We are going to ensure that everything is working by running the `node ./dist/apps/auth/main` command.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ node ./dist/apps/auth/main
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [NestFactory] Starting Nest application...
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] AppModule dependencies initialized +16ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] PrismaModule dependencies initialized +0ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] ConfigModule dependencies initialized +1ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] UsersModule dependencies initialized +2ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] GraphQLSchemaBuilderModule dependencies initialized +0ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] GraphQLModule dependencies initialized +1ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [RoutesResolver] AuthController {/api}: +11ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [GraphQLModule] Mapped {/graphql, POST} route +97ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [NestApplication] Nest application successfully started +2ms
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG 🚀 Application is running on: http://localhost:3000/api
+[Nest] 72078  - 16/03/2025, 05:14:45     LOG [NestMicroservice] Nest microservice successfully started
+```
+
+- We can do the same for the `executor` app.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ node ./dist/apps/executor/main
+[Nest] 74019  - 16/03/2025, 05:16:20     LOG [NestFactory] Starting Nest application...
+[Nest] 74019  - 16/03/2025, 05:16:20     LOG [InstanceLoader] AppModule dependencies initialized +7ms
+[Nest] 74019  - 16/03/2025, 05:16:20     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 74019  - 16/03/2025, 05:16:20     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 74019  - 16/03/2025, 05:16:20   ERROR [ExceptionHandler] TypeError: Configuration key "PULSAR_SERVICE_URL" does not exist
+    at ConfigService.getOrThrow (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/config/dist/config.service.js:132:19)
+    at new PulsarClient (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/libs/pulsar/main.js:67:44)
+    at Injector.instantiateClass (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:373:19)
+    at callback (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:65:45)
+    at async Injector.resolveConstructorParams (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:145:24)
+    at async Injector.loadInstance (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:70:13)
+    at async Injector.loadProvider (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:98:9)
+    at async Injector.lookupComponentInImports (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:297:17)
+    at async Injector.lookupComponentInParentModules (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:260:33)
+    at async Injector.resolveComponentInstance (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:215:33)
+```
+
+- The problem is that the `PULSAR_SERVICE_URL` environment variable is not set.
+- We'll set these environment variables in the Docker Compose file.
+
+- We can do the same for the `jobs` app.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ node ./dist/apps/jobs/main
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [NestFactory] Starting Nest application...
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] AppModule dependencies initialized +13ms
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] ClientsModule dependencies initialized +0ms
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] DiscoveryModule dependencies initialized +0ms
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] ConfigModule dependencies initialized +1ms
+[Nest] 75578  - 16/03/2025, 05:17:36     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 75578  - 16/03/2025, 05:17:36   ERROR [ExceptionHandler] TypeError: Configuration key "PULSAR_SERVICE_URL" does not exist
+    at ConfigService.getOrThrow (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/config/dist/config.service.js:132:19)
+    at new PulsarClient (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/dist/libs/pulsar/main.js:67:44)
+    at Injector.instantiateClass (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:373:19)
+    at callback (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:65:45)
+    at async Injector.resolveConstructorParams (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:145:24)
+    at async Injector.loadInstance (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:70:13)
+    at async Injector.loadProvider (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/injector.js:98:9)
+    at async /home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/instance-loader.js:56:13
+    at async Promise.all (index 3)
+    at async InstanceLoader.createInstancesOfProviders (/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/node_modules/@nestjs/core/injector/instance-loader.js:55:9)
+```
+
+- We can see we have the same problem as before.
