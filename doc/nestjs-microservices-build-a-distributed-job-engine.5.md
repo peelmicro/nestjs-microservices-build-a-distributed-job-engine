@@ -1707,9 +1707,6 @@ module.exports = merge(commonConfig, {
 
 ```bash
 juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm run serve:all
-```
-
-juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ npm run serve:all
 
 > @jobber/source@0.0.0 serve:all
 > nx run-many -t serve -p auth jobs executor
@@ -1944,7 +1941,4 @@ parentModule: [Object]
 [Nest] 297965 - 16/03/2025, 12:30:04 LOG [GraphQLModule] Mapped {/graphql, POST} route +79ms
 [Nest] 297965 - 16/03/2025, 12:30:04 LOG [NestApplication] Nest application successfully started +2ms
 [Nest] 297965 - 16/03/2025, 12:30:04 LOG 🚀 Application is running on: http://localhost:3001/api
-
-```
-
 ```
