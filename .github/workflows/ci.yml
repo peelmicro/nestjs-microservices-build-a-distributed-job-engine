@@ -53,3 +53,36 @@ jobs:
       - run: npx nx run-many --targets=lint,test,build --all # Run on ALL projects, this is a better approach than nx affected if we don't use Nx Cloud
         env:
           NX_VERBOSE_LOGGING: 'true'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} --password-stdin ${{ secrets.AWS_PASSWORD_STDIN }}
+
+      - name: Build and push all images to ECR
+        run: |
+          IMAGES=(
+            "jobs apps/jobs/Dockerfile"
+            "executor apps/executor/Dockerfile"
+            "auth apps/auth/Dockerfile"
+          )
+
+          for image in "${IMAGES[@]}"; do
+            NAME=$(echo $image | cut -d' ' -f1)
+            DOCKERFILE=$(echo $image | cut -d' ' -f2)
+
+            {
+              docker build \
+                --tag ${{ secrets.AWS_PASSWORD_STDIN }}/jobber/$NAME:latest \
+                -f $DOCKERFILE \
+                . && docker push ${{ secrets.AWS_PASSWORD_STDIN }}/jobber/$NAME:latest
+            } &
+          done
+
+          wait
