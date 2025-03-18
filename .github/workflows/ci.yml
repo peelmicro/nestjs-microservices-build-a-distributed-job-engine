@@ -63,7 +63,7 @@ jobs:
 
       - name: Log in to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} --password-stdin ${{ secrets.AWS_PASSWORD_STDIN }}
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_REGISTRY }}
 
       - name: Build and push all images to ECR
         run: |
@@ -79,9 +79,9 @@ jobs:
 
             {
               docker build \
-                --tag ${{ secrets.AWS_PASSWORD_STDIN }}/jobber/$NAME:latest \
+                --tag ${{ secrets.AWS_ECR_REGISTRY }}/jobber/$NAME:latest \
                 -f $DOCKERFILE \
-                . && docker push ${{ secrets.AWS_PASSWORD_STDIN }}/jobber/$NAME:latest
+                . && docker push ${{ secrets.AWS_ECR_REGISTRY }}/jobber/$NAME:latest
             } &
           done
 
