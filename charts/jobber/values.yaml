@@ -1,0 +1,78 @@
+global:
+  imagePullPolicy: Always
+
+pulsar:
+  namespace: pulsar
+  namespaceCreate: true
+  # Disable VictoriaMetrics components completely
+  victoria-metrics-k8s-stack:
+    enabled: false
+# Disable monitoring components
+  zookeeper:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  broker:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  bookkeeper:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  autorecovery:
+    podMonitor:
+      enabled: false
+  proxy:
+    podMonitor:
+      enabled: false
+  kube-prometheus-stack:
+    enabled: false
+    prometheusOperator:
+      enabled: false
+    grafana:
+      enabled: false
+    alertmanager:
+      enabled: false
+    prometheus:
+      enabled: false
+
+  # Minimal deployment
+  components:
+    zookeeper: true
+    bookkeeper: true
+    broker: true
+    proxy: false
+    autorecovery: false
+    functions: false
+    toolset: true
+
+postgresql:
+  namespaceOverride: postgresql
+  auth:
+    username: postgres
+    password: postgres
+    database: jobber
+
+jobs:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/jobs:latest
+  port: 3001
+
+executor:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/executor:latest
+  port: 3002
+
+auth:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest
+  port:
+    http: 3000
+    grpc: 5000
+  jwt:
+    secret: CBm2b6nKxeDTl2UOZxbR6YwqDbUmxAJl
+    expirationMs: 28800000
