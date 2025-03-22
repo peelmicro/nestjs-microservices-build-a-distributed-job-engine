@@ -2565,3 +2565,80 @@ import { PulsarModule } from '@jobber/pulsar';
 })
 export class JobsModule {}
 ```
+
+- Once we have updated the jobber chart with `helm upgrade jobber . -n jobber`, we can see that the `jobs` service is working.
+- We can execute the `jobsMetadata` query again to see that it is working.
+
+> Request:
+
+```http
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+```
+
+> Response:
+
+````json
+{
+  "data": {
+    "jobsMetadata": []
+  }
+}
+```{
+  "data": {
+    "jobsMetadata": [
+      {
+        "name": "Fibonacci",
+        "description": "Generate a Fibonacci sequence and store it in the DB."
+      }
+    ]
+  }
+}
+````
+
+- We can try to execute the `Fibonacci` job.
+
+> Request:
+
+```http
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iterations: 40}}) {
+    name
+  }
+}
+```
+
+> Response:
+
+```json
+{
+  "data": {
+    "executeJob": {
+      "name": "Fibonacci"
+    }
+  }
+}
+```
+
+- We can see the logs of the `executor` service to see that the `Fibonacci` job is working.
+
+```bash
+kubectl logs executor-56d7cb958f-vr6qp -n jobber
+{"level":30,"time":1742618779312,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"LoggerModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"ConfigHostModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"PulsarModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"JobsModule dependencies initialized"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"InstanceLoader","msg":"LoggerModule dependencies initialized"}
+{"level":40,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"LegacyRouteConverter","msg":"Unsupported route path: \"/api/*\". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of \"path-to-regexp\" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with \"/users\", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert..."}
+{"level":40,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"LegacyRouteConverter","msg":"Unsupported route path: \"/api/*\". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of \"path-to-regexp\" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with \"/users\", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert..."}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1742618779313,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","msg":"🚀 Application is running on: http://localhost:3002/api"}
+{"level":30,"time":1742643288711,"pid":1,"hostname":"executor-56d7cb958f-vr6qp","context":"Fibonacci","msg":"FibonacciConsumer: Result: {\n  \"number\": \"102334155\",\n  \"length\": 9,\n  \"iterations\": \"40\",\n  \"ms\": 2\n}"}
+```
