@@ -18,6 +18,11 @@ import { GqlLoggingPlugin } from '@jobber/graphql';
       context: ({ req, res }) => ({ req, res }),
       autoSchemaFile: true,
       plugins: [new GqlLoggingPlugin()],
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
     }),
     UsersModule,
     AuthModule,

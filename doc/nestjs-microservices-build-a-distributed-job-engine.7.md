@@ -1854,25 +1854,284 @@ kubectl logs auth-f6d6f5559-bwt7g -n jobber
 {"level":30,"time":1742537745401,"pid":1,"hostname":"auth-f6d6f5559-bwt7g","context":"NestMicroservice","msg":"Nest microservice successfully started"}
 ```
 
-- We can see the `auth` service is running.
+### 11.10 Creating Kubernetes Services to expose actual network traffic to our underlying
+
+- We are going to create Kubernetes Services to expose actual network traffic to our underlying for the `auth` and `jobs` services.
+
+- We need to create the `service.http.yaml` file for the `auth` service for exposing the `http` ports to the outside world.
+
+> charts/jobber/templates/auth/service.http.yaml
+
+```yaml
+{{- if .Values.auth.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-http
+  labels:
+    app: auth
+spec:
+  type: ClusterIP
+  selector:
+    app: auth
+  ports:
+    - protocol: TCP
+      port: {{ .Values.auth.port.http }}
+      targetPort: {{ .Values.auth.port.http }}
+{{- end }}
+```
+
+- We need to create the `service.grpc.yaml` file for the `auth` service for exposing the `grpc` ports to the outside world.
+
+> charts/jobber/templates/auth/service.grpc.yaml
+
+```yaml
+{{- if .Values.auth.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-grpc
+  labels:
+    app: auth
+spec:
+  type: ClusterIP
+  selector:
+    app: auth
+  ports:
+    - protocol: TCP
+      port: {{ .Values.auth.port.grpc }}
+      targetPort: {{ .Values.auth.port.grpc }}
+{{- end }}
+```
+
+- We need to create the `service.yaml` file for the `jobs` service for exposing the `http` port to the outside world.
+
+> charts/jobber/templates/jobs/service.yaml
+
+```yaml
+{{- if .Values.jobs.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobs
+  labels:
+    app: jobs
+spec:
+  type: ClusterIP
+  selector:
+    app: jobs
+  ports:
+    - protocol: TCP
+      port: {{ .Values.jobs.port }}
+      targetPort: {{ .Values.jobs.port }}
+{{- end }}
+```
+
+- We need to upgrade the `jobber` chart again.
 
 ```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/charts/jobber$ helm upgrade jobber . -n jobber
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Fri Mar 21 17:17:35 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+```
 
+- We can check the services see that they are running.
 
+```bash
+ kubectl get svc -n jobber
+NAME        TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+auth-grpc   ClusterIP   10.102.190.3     <none>        5000/TCP   12m
+auth-http   ClusterIP   10.100.168.38    <none>        3000/TCP   12m
+jobs        ClusterIP   10.107.128.185   <none>        3001/TCP   12m
+```
 
+### 11.11 Accessing the services from inside the cluster using Minikube
 
+- We can access the services from inside the cluster using Minikube.
 
+```bash
+inikube service jobs -n jobber
+|-----------|------|-------------|--------------|
+| NAMESPACE | NAME | TARGET PORT |     URL      |
+|-----------|------|-------------|--------------|
+| jobber    | jobs |             | No node port |
+|-----------|------|-------------|--------------|
+😿  service jobber/jobs has no node port
+❗  Services [jobber/jobs] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service jobs.
+|-----------|------|-------------|------------------------|
+| NAMESPACE | NAME | TARGET PORT |          URL           |
+|-----------|------|-------------|------------------------|
+| jobber    | jobs |             | http://127.0.0.1:35537 |
+|-----------|------|-------------|------------------------|
+🎉  Opening service jobber/jobs in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+```
 
+- We can open that URL in the browser and see the `jobs` service.
+- Where we can see there is an error because we have access to the `/graphql` endpoint.
 
+![Jobs Service](image034.png)
 
+- If we access the `/graphql` endpoint we can it is working.
 
+![Jobs Service GraphQL](image035.png)
 
+- We can even run a query.
 
+![Jobs Service GraphQL Query](image036.png)
 
+- We can access to the `auth` service using the `auth-http` service.
 
+```bash
+minikube service auth-http -n jobber
+|-----------|-----------|-------------|--------------|
+| NAMESPACE |   NAME    | TARGET PORT |     URL      |
+|-----------|-----------|-------------|--------------|
+| jobber    | auth-http |             | No node port |
+|-----------|-----------|-------------|--------------|
+😿  service jobber/auth-http has no node port
+❗  Services [jobber/auth-http] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service auth-http.
+|-----------|-----------|-------------|------------------------|
+| NAMESPACE |   NAME    | TARGET PORT |          URL           |
+|-----------|-----------|-------------|------------------------|
+| jobber    | auth-http |             | http://127.0.0.1:41025 |
+|-----------|-----------|-------------|------------------------|
+🎉  Opening service jobber/auth-http in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+```
 
+### 11.12 Running the Prisma database migrations
 
+- We need to run the Prisma database migrations so that any changes to the database schema are applied in the database from the cluster.
+- We need to modify the `libs/prisma/package.json` file to include the `prisma` npm package inside the `dependencies` section instead of the `devDependencies` section. The reason for this is that we need the dependency tp be copy inside the docker image, as if it is only in the `devDependencies` section, it will not be copied.
 
+> libs/prisma/package.json
 
+```json
+{
+  "name": "@jobber/prisma",
+  "version": "0.0.0",
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "prisma": "^6.4.1"
+  }
+}
+```
 
+- We need to update the `charts/jobber/templates/auth/deployment.yaml` file to include the `prisma-migrate` init container.
+
+> charts/jobber/templates/auth/deployment.yaml
+
+```diff
+{{- if .Values.auth.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  labels:
+    app: auth
+spec:
+  replicas: {{ .Values.auth.replicas }}
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+    spec:
++     initContainers:
++       - name: prisma-migrate
++         image: {{ .Values.auth.image }}
++         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
++         command: ["sh", "-c"]
++         args:
++           - |
++             npx prisma migrate deploy --schema=apps/auth/prisma/schema.prisma
++         env:
++           {{- include "common.env" . | nindent 12 }}
+      containers:
+        - name: auth
+          image: {{ .Values.auth.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.auth.port.http }}
+            - containerPort: {{ .Values.auth.port.grpc }}
+          env:
+            {{- include "common.env" . | nindent 12 }}
+            - name: PORT
+              value: "{{ .Values.auth.port.http }}"
+            - name: JWT_SECRET
+              value: {{ .Values.auth.jwt.secret }}
+            - name: JWT_EXPIRATION_MS
+              value: "{{ .Values.auth.jwt.expirationMs }}"
+            - name: AUTH_GRPC_SERVICE_URL
+              value: "0.0.0.0:{{ .Values.auth.port.grpc }}"
+{{- end }}
+```
+
+- We need to upgrade the `jobber` chart again.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/charts/jobber$ helm upgrade jobber . -n jobber
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Fri Mar 21 17:17:35 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+```
+
+- Once we ensure the `GitHub Actions` pipeline is working, we can execute `helm upgrade jobber . -n jobber` to deploy the changes to the cluster.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/charts/jobber$ helm upgrade jobber . -n jobber
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Sat Mar 22 04:50:16 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 4
+TEST SUITE: None
+```
+
+- We can check the pods to see that the `auth` service has been restarted and the `prisma-migrate` init container has been executed.
+
+```bash
+kubectl get pods -n jobberkubectl get po -n jobber
+NAME                        READY   STATUS    RESTARTS        AGE
+auth-cf965b874-t2t8x        1/1     Running   0               64s
+executor-56d7cb958f-vr6qp   1/1     Running   2 (5m37s ago)   21h
+jobs-54b647f788-qvpbg       1/1     Running   1 (6m40s ago)   21h
+```
+
+- We can see the logs of the `auth` service to see that the `prisma-migrate` init container has been executed.
+
+```bash
+kubectl logs auth-cf965b874-t2t8x -c prisma-migrate -n jobber
+npm warn exec The following package was not found and will be installed: prisma@6.5.0
+Prisma schema loaded from apps/auth/prisma/schema.prisma
+Datasource "db": PostgreSQL database "jobber", schema "public" at "jobber-postgresql.postgresql.svc.cluster.local:5432"
+
+1 migration found in prisma/migrations
+
+Applying migration `20250216044013_users`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20250216044013_users/
+    └─ migration.sql
+
+All migrations have been successfully applied.
 ```
