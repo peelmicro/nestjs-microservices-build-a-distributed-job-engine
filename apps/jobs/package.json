@@ -3,5 +3,8 @@
   "version": "0.0.0",
   "dependencies": {
     "graphql-type-json": "^0.3.2"
+  },
+  "devDependencies": {
+    "@types/multer": "^1.4.12"
   }
 }

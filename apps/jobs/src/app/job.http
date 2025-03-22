@@ -1,4 +1,6 @@
 @urlLogin = http://localhost:3000/graphql
+
+@urlRest = http://localhost:3001/api
 @url = http://localhost:3001/graphql
 
 ### Login
@@ -79,3 +81,17 @@ mutation {
     name
   }
 }
+
+### Upload file
+POST {{urlRest}}/uploads/upload
+Content-Type: multipart/form-data ; boundary=MfnBoundry
+
+--MfnBoundry
+Content-Disposition: form-data; name="file"; filename="products.json"
+Content-Type: application/json
+
+< ./data/products.json
+
+--MfnBoundry--
+
+

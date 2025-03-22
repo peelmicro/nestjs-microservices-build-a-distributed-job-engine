@@ -694,3 +694,510 @@ Defaulted container "jobber-pulsar-broker" out of: jobber-pulsar-broker, wait-zo
   - 5 - "messageAckRate" : "messageAckRate" : 2.6833340882893792, --> 2.6 messages per second
 - "msgBacklog" : 2550, --> 2550 messages in the backlog
 - So, it has been increased from 3.45 to 13.6 messages per second.
+
+## 12 Adding the `Products` service
+
+### 12.1. Adding the `products.json` file
+
+- We will add the `products.json` file to new `data` folder in the `root` folder.
+
+- We will add the `Products` service to the `jobber` namespace.
+
+> data/products.json
+
+```json
+[
+  {
+    "name": "Yoga Mat",
+    "category": "Sports & Outdoors",
+    "price": 110.53,
+    "stock": 220,
+    "rating": 4.0,
+    "description": "Non-slip yoga mat with extra cushioning for comfort during workouts."
+  },
+  {
+    "name": "Stainless Steel Water Bottle",
+    "category": "Home & Kitchen",
+    "price": 125.0,
+    "stock": 234,
+    "rating": 3.4,
+    "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+  },
+  .
+  .
+  .
+  {
+    "name": "Smart Watch",
+    "category": "Electronics",
+    "price": 150.88,
+    "stock": 258,
+    "rating": 3.5,
+    "description": "Track your fitness, receive notifications, and more with this sleek smartwatch."
+  },
+  {
+    "name": "Stainless Steel Water Bottle",
+    "category": "Home & Kitchen",
+    "price": 247.84,
+    "stock": 147,
+    "rating": 4.7,
+    "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+  }
+]
+```
+
+### 12.2. Adding the `Upload` module inside the `jobs` service
+
+#### 12.2.1. Adding the `@types/multer` npm package to the `jobs` service
+
+- We will add the `@types/multer` npm package to the `jobs` service.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/jobs$ npm i --save-dev @types/multer --legacy-peer-deps
+
+added 1 package, and audited 1391 packages in 3s
+
+228 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+```
+
+#### 12.2.2. Creating `UPLOAD_FILE_PATH` constant
+
+- We will create a new constant called `UPLOAD_FILE_PATH` in the `uploads.controller.ts` file.
+
+> apps/jobs/src/app/uploads/upload.ts
+
+```ts
+import path = require('path');
+
+export const UPLOAD_FILE_PATH = path.join(process.cwd(), 'apps/jobs/uploads');
+```
+
+#### 12.2.3. Creating the `UploadsController` controller
+
+- We will create a new controller called `UploadsController` in the `uploads.controller.ts` file.
+
+> apps/jobs/src/app/uploads/uploads.controller.ts
+
+```ts
+import { BadRequestException, Controller, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Express } from 'express';
+import { diskStorage } from 'multer';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UPLOAD_FILE_PATH } from './upload';
+
+@Controller('uploads')
+export class UploadsController {
+  @Post('upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: UPLOAD_FILE_PATH,
+        filename: (_req: any, file: { fieldname: any }, callback: (arg0: null, arg1: string) => void) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const filename = `${file.fieldname}-${uniqueSuffix}.json`;
+          callback(null, filename);
+        },
+      }),
+      fileFilter: (_req, file, callback) => {
+        if (file.mimetype !== 'application/json') {
+          return callback(new BadRequestException('Only JSON files are allowed!'), false);
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadFile(@UploadedFile() file: Express.Multer.File) {
+    return {
+      message: 'File uploaded successfully',
+      filename: file.filename,
+    };
+  }
+}
+```
+
+#### 12.2.4. Creating the `UploadsModule` module
+
+- We will create a new module called `UploadsModule` in the `uploads.module.ts` file.
+
+> apps/jobs/src/app/uploads/uploads.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { UploadsController } from './uploads.controller';
+
+import { Module } from '@nestjs/common';
+import { UploadsController } from './uploads.controller';
+
+@Module({
+  controllers: [UploadsController],
+})
+export class UploadsModule {}
+```
+
+#### 12.2.5. Adding the `UploadsModule` to the `AppModule`
+
+- We will add the `UploadsModule` to the `AppModule` in the `app.module.ts` file.
+
+> apps/jobs/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { JobsModule } from './jobs.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { LoggerModule } from '@jobber/nestjs';
+import { GqlLoggingPlugin } from '@jobber/graphql';
++import { UploadsModule } from './uploads/uploads.module';
+@Module({
+  imports: [
+    LoggerModule,
++   UploadsModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    JobsModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+      plugins: [new GqlLoggingPlugin()],
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
+    }),
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+#### 12.2.6. We need to ensure we can serve the `jobs` service
+
+- We need to ensure we can serve the `jobs` service.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve jobs
+
+ NX   Running target serve for project jobs and 6 tasks it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run grpc:generate-ts-proto
+
+> npx protoc --plugin=protoc-gen-ts_proto=../../node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/lib/types/proto ./src/lib/proto/*.proto --ts_proto_opt=nestJs=true --ts_proto_opt=exportCommonSymbols=false
+
+
+> nx run nestjs:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 2.58 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 2.58 KiB [entry] [rendered]
+webpack compiled successfully (09c76bbd450379d5)
+
+> nx run pulsar:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 5.63 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 5.63 KiB [entry] [rendered]
+webpack compiled successfully (c7530fb194af6872)
+
+> nx run grpc:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 3.26 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 3.26 KiB [entry] [rendered]
+webpack compiled successfully (554c08c23f9c5797)
+
+> nx run graphql:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 4.8 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 4.8 KiB [entry] [rendered]
+webpack compiled successfully (0bb1536f0fbd912e)
+
+> nx run jobs:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 17.8 KiB [entry] [rendered]
+webpack compiled successfully (9689e11a65093401)
+
+> nx run jobs:serve:development
+
+
+ NX   Running target build for project jobs and 5 tasks it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run grpc:generate-ts-proto  [existing outputs match the cache, left as is]
+
+
+> nx run nestjs:build  [existing outputs match the cache, left as is]
+
+
+> nx run pulsar:build  [existing outputs match the cache, left as is]
+
+
+> nx run grpc:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 3.26 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 3.26 KiB [entry] [rendered]
+webpack compiled successfully (554c08c23f9c5797)
+
+> nx run graphql:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 4.8 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 4.8 KiB [entry] [rendered]
+webpack compiled successfully (0bb1536f0fbd912e)
+
+> nx run jobs:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 17.8 KiB [entry] [rendered]
+webpack compiled successfully (9689e11a65093401)
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project jobs and 5 tasks it depends on
+
+Nx read the output from the cache instead of running the command for 3 out of 6 tasks.
+
+Debugger listening on ws://localhost:9229/e9bf3f93-27e0-42cb-917b-5235d4a0e822
+For help, see: https://nodejs.org/en/docs/inspector
+
+[
+  {
+    meta: {
+      name: 'Fibonacci',
+      description: 'Generate a Fibonacci sequence and store it in the DB.'
+    },
+    discoveredClass: {
+      name: 'FibonacciJob',
+      instance: [FibonacciJob],
+      injectType: [class FibonacciJob extends AbstractJob],
+      dependencyType: [class FibonacciJob extends AbstractJob],
+      parentModule: [Object]
+    }
+  }
+]
+[15:54:47.779] INFO (654083): Starting Nest application... {"context":"NestFactory"}
+[15:54:47.779] INFO (654083): AppModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.779] INFO (654083): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.779] INFO (654083): ConfigHostModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.779] INFO (654083): DiscoveryModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.779] INFO (654083): ConfigModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.779] INFO (654083): ConfigModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): UploadsModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): PulsarModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): ClientsModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): GraphQLSchemaBuilderModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): JobsModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] INFO (654083): GraphQLModule dependencies initialized {"context":"InstanceLoader"}
+[15:54:47.780] WARN (654083): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[15:54:47.780] WARN (654083): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[15:54:47.780] INFO (654083): UploadsController {/api/uploads}: {"context":"RoutesResolver"}
+[15:54:47.780] INFO (654083): Mapped {/api/uploads/upload, POST} route {"context":"RouterExplorer"}
+[15:54:47.780] INFO (654083): Mapped {/graphql, POST} route {"context":"GraphQLModule"}
+[15:54:47.780] INFO (654083): Nest application successfully started {"context":"NestApplication"}
+[15:54:47.780] INFO (654083): 🚀 Application is running on: http://localhost:3001/api
+```
+
+- We can see the `jobs` service is running on port `3001`.
+
+````bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ curl http://localhost:3001/api/uploads/upload
+
+#### 12.2.7. Updating  the `jobs.http` document to include the "### Upload file" request
+
+- We will update the `jobs.http` document to include the "### Upload file" request.
+
+> doc/jobs.http
+
+```http
+.
+@urlRest = http://localhost:3001/api
+.
+### Upload file
+POST {{urlRest}}/uploads/upload
+Content-Type: multipart/form-data ; boundary=MfnBoundry
+
+--MfnBoundry
+Content-Disposition: form-data; name="file"; filename="products.json"
+Content-Type: application/json
+
+< ./data/products.json
+
+--MfnBoundry--
+````
+
+- We are going to test the `### Upload file` request.
+
+> response
+
+```json
+HTTP/1.1 201 Created
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 87
+ETag: W/"57-H+aQ0VZIqBYGYpzvan0rSnVYrVw"
+Date: Sat, 22 Mar 2025 16:06:14 GMT
+Connection: close
+
+{
+  "message": "File uploaded successfully",
+  "filename": "file-1742659574274-319632607.json"
+}
+```
+
+#### 12.2.8. Ensuring the file is uploaded
+
+- We need to ensure the file is uploaded to the `uploads` folder.
+
+> apps/jobs/uploads/file-1742659574274-319632607.json
+
+```json
+[
+  {
+    "name": "Yoga Mat",
+    "category": "Sports & Outdoors",
+    "price": 110.53,
+    "stock": 220,
+    "rating": 4.0,
+    "description": "Non-slip yoga mat with extra cushioning for comfort during workouts."
+  },
+  {
+    "name": "Stainless Steel Water Bottle",
+    "category": "Home & Kitchen",
+    "price": 125.0,
+    "stock": 234,
+    "rating": 3.4,
+    "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+  },
+  {
+    "name": "Smart Watch",
+    "category": "Electronics",
+    "price": 150.88,
+    "stock": 258,
+    "rating": 3.5,
+    "description": "Track your fitness, receive notifications, and more with this sleek smartwatch."
+  },
+  {
+    "name": "Stainless Steel Water Bottle",
+    "category": "Home & Kitchen",
+    "price": 247.84,
+    "stock": 147,
+    "rating": 4.7,
+    "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+  }
+]
+```
+
+### 12.3. Adding the new `Products` service
+
+#### 12.3.1. Adding the `Products` service to the `jobber` namespace
+
+- We will add the `Products` service to the `jobber` namespace by using `nx CLI`.
+
+```bash
+nx generate app products
+✔ Which generator would you like to use? · @nx/nest:application
+
+ NX  Generating @nx/nest:application
+
+✔ Which linter would you like to use? · eslint
+✔ Which unit test runner would you like to use? · none
+CREATE apps/products/src/assets/.gitkeep
+CREATE apps/products/src/main.ts
+CREATE apps/products/tsconfig.app.json
+CREATE apps/products/tsconfig.json
+CREATE apps/products/webpack.config.js
+CREATE apps/products/project.json
+CREATE apps/products/eslint.config.mjs
+CREATE apps/products-e2e/project.json
+UPDATE nx.json
+CREATE apps/products-e2e/jest.config.ts
+CREATE apps/products-e2e/src/products/products.spec.ts
+CREATE apps/products-e2e/src/support/global-setup.ts
+CREATE apps/products-e2e/src/support/global-teardown.ts
+CREATE apps/products-e2e/src/support/test-setup.ts
+CREATE apps/products-e2e/tsconfig.json
+CREATE apps/products-e2e/tsconfig.spec.json
+CREATE apps/products-e2e/eslint.config.mjs
+CREATE apps/products/src/app/app.controller.spec.ts
+CREATE apps/products/src/app/app.controller.ts
+CREATE apps/products/src/app/app.module.ts
+CREATE apps/products/src/app/app.service.spec.ts
+CREATE apps/products/src/app/app.service.ts
+
+ NX   👀 View Details of products-e2e
+
+Run "nx show project products-e2e" to view details about this project.
+
+
+ NX   👀 View Details of products
+
+Run "nx show project products" to view details about this project.
+```
+
+- We are going to remove the `products-e2e` and the `*.spec.ts` files.
+
+```bash
+rm -rf apps/products-e2e
+rm -rf apps/products/*.spec.ts
+```
+
+- We are going to ensure the `products` service is running.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve products
+
+ NX   Running target serve for project products and 1 task it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run products:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 2.71 KiB [entry] [rendered]
+webpack compiled successfully (a2a21e41fc30e038)
+
+> nx run products:serve:development
+
+
+> nx run products:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 2.71 KiB [entry] [rendered]
+webpack compiled successfully (a2a21e41fc30e038)
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project products
+
+
+Starting inspector on localhost:9229 failed: address already in use
+
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG [NestFactory] Starting Nest application...
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG [InstanceLoader] AppModule dependencies initialized +9ms
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG [RoutesResolver] AppController {/api}: +5ms
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG [RouterExplorer] Mapped {/api, GET} route +3ms
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG [NestApplication] Nest application successfully started +1ms
+[Nest] 724321  - 22/03/2025, 16:25:36     LOG 🚀 Application is running on: http://localhost:3000/api
+```
