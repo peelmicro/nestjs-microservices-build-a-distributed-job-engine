@@ -2135,3 +2135,433 @@ migrations/
 
 All migrations have been successfully applied.
 ```
+
+- We can try again to access the `auth` service from the browser and see that it is working.
+- We have to execute `minikube service auth-http -n jobber` to have access to the service.
+
+```bash
+minikube service auth-http -n jobber
+|-----------|-----------|-------------|--------------|
+| NAMESPACE |   NAME    | TARGET PORT |     URL      |
+|-----------|-----------|-------------|--------------|
+| jobber    | auth-http |             | No node port |
+|-----------|-----------|-------------|--------------|
+😿  service jobber/auth-http has no node port
+❗  Services [jobber/auth-http] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service auth-http.
+|-----------|-----------|-------------|------------------------|
+| NAMESPACE |   NAME    | TARGET PORT |          URL           |
+|-----------|-----------|-------------|------------------------|
+| jobber    | auth-http |             | http://127.0.0.1:41325 |
+|-----------|-----------|-------------|------------------------|
+🎉  Opening service jobber/auth-http in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+```
+
+- We need to try to create a user using the `auth` service from the browser.
+
+> Request:
+
+```
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+> Response:
+
+```json
+{
+  "data": {
+    "upsertUser": {
+      "id": "1",
+      "email": "my-email2@msn.com",
+      "createdAt": "2025-03-22T05:13:32.787Z",
+      "updatedAt": "2025-03-22T05:13:32.786Z"
+    }
+  }
+}
+```
+
+- Now, we can try to authenticate using the `auth` service from the browser.
+
+![Auth Service User Created](image037.png)
+
+> Request:
+
+```
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword1!" }) {
+    id
+  }
+}
+```
+
+> Response:
+
+```json
+{
+  "errors": [
+    {
+      "message": "\"expiresIn\" should be a number of seconds or string representing a timespan eg: \"1d\", \"20h\", 60",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": ["login"],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+- We can see that the error is because the `expiresIn` is not properly defined in our `values.yaml` document.
+- If we describe the `auth` service.
+
+```bash
+kubectl describe po auth-cf965b874-t2t8x -n jobber
+Name:             auth-cf965b874-t2t8x
+Namespace:        jobber
+Priority:         0
+Service Account:  default
+Node:             minikube/192.168.49.2
+Start Time:       Sat, 22 Mar 2025 04:50:19 +0000
+Labels:           app=auth
+                  pod-template-hash=cf965b874
+Annotations:      <none>
+Status:           Running
+IP:               10.244.0.69
+IPs:
+  IP:           10.244.0.69
+Controlled By:  ReplicaSet/auth-cf965b874
+Init Containers:
+  prisma-migrate:
+    Container ID:  docker://5801390b21c939547afff80c12ba625e50392e36a8a0d8235241f380192ee6ef
+    Image:         072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest
+    Image ID:      docker-pullable://072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth@sha256:dc8c7dc608ee63461c16115425ca8f456ce81a4bbad9c3ea55be82e6ed7bcbbc
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      sh
+      -c
+    Args:
+      npx prisma migrate deploy --schema=apps/auth/prisma/schema.prisma
+
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Sat, 22 Mar 2025 04:50:21 +0000
+      Finished:     Sat, 22 Mar 2025 04:50:25 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:
+      PULSAR_SERVICE_URL:  pulsar://jobber-pulsar-broker.pulsar.svc.cluster.local:6650
+      DATABASE_URL:        postgresql://postgres:postgres@jobber-postgresql.postgresql.svc.cluster.local:5432/jobber
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-s5j29 (ro)
+Containers:
+  auth:
+    Container ID:   docker://75584a0b735698890493b3d6e85d52927581f14e4e3ffe2a93f21bf6306e02f3
+    Image:          072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest
+    Image ID:       docker-pullable://072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth@sha256:dc8c7dc608ee63461c16115425ca8f456ce81a4bbad9c3ea55be82e6ed7bcbbc
+    Ports:          3000/TCP, 5000/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Sat, 22 Mar 2025 04:50:27 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:
+      PULSAR_SERVICE_URL:     pulsar://jobber-pulsar-broker.pulsar.svc.cluster.local:6650
+      DATABASE_URL:           postgresql://postgres:postgres@jobber-postgresql.postgresql.svc.cluster.local:5432/jobber
+      PORT:                   3000
+      JWT_SECRET:             CBm2b6nKxeDTl2UOZxbR6YwqDbUmxAJl
+      JWT_EXPIRATION_MS:      2.88e+07
+      AUTH_GRPC_SERVICE_URL:  0.0.0.0:5000
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-s5j29 (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True
+  Initialized                 True
+  Ready                       True
+  ContainersReady             True
+  PodScheduled                True
+Volumes:
+  kube-api-access-s5j29:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   BestEffort
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  34m   default-scheduler  Successfully assigned jobber/auth-cf965b874-t2t8x to minikube
+  Normal  Pulling    33m   kubelet            Pulling image "072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest"
+  Normal  Pulled     33m   kubelet            Successfully pulled image "072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest" in 994ms (994ms including waiting). Image size: 821651218 bytes.
+  Normal  Created    33m   kubelet            Created container: prisma-migrate
+  Normal  Started    33m   kubelet            Started container prisma-migrate
+  Normal  Pulling    33m   kubelet            Pulling image "072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest"
+  Normal  Pulled     33m   kubelet            Successfully pulled image "072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest" in 771ms (771ms including waiting). Image size: 821651218 bytes.
+  Normal  Created    33m   kubelet            Created container: auth
+  Normal  Started    33m   kubelet            Started container auth
+```
+
+- We can see that the `JWT_EXPIRATION_MS` is set to `2.88e+07` which is not a valid value.
+- We need to set the `JWT_EXPIRATION_MS` to a valid value.
+
+```diff
+.
+auth:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest
+  port:
+    http: 3000
+    grpc: 5000
+  jwt:
+    secret: CBm2b6nKxeDTl2UOZxbR6YwqDbUmxAJl
+-   expirationMs: 28800000
++   expirationMs: "28800000"
+```
+
+- We need to upgrade the `jobber` chart again.
+- If we execute the login mutation again, we can see that it is working.
+
+> Request:
+
+```
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword1!" }) {
+    id
+  }
+}
+```
+
+> Response:
+
+```json
+{
+  "data": {
+    "login": {
+      "id": "1"
+    }
+  }
+}
+```
+
+- We are ready to test the `jobs` service.
+- We need to execute the `minikube service jobs-http -n jobber` command to have access to the service.
+
+```bash
+minikube service auth-http -n jobber
+|-----------|-----------|-------------|--------------|
+| NAMESPACE |   NAME    | TARGET PORT |     URL      |
+|-----------|-----------|-------------|--------------|
+| jobber    | auth-http |             | No node port |
+|-----------|-----------|-------------|--------------|
+😿  service jobber/auth-http has no node port
+❗  Services [jobber/auth-http] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service auth-http.
+|-----------|-----------|-------------|------------------------|
+| NAMESPACE |   NAME    | TARGET PORT |          URL           |
+|-----------|-----------|-------------|------------------------|
+| jobber    | auth-http |             | http://127.0.0.1:42469 |
+|-----------|-----------|-------------|------------------------|
+🎉  Opening service jobber/auth-http in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+```
+
+- If we try to execute the the `jobsMetadata` query.
+
+> Request:
+
+```
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+```
+
+> Response:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Forbidden resource",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": ["jobsMetadata"],
+      "extensions": {
+        "code": "FORBIDDEN",
+        "originalError": {
+          "message": "Forbidden resource",
+          "error": "Forbidden",
+          "statusCode": 403
+        }
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+- We can see that the error is because the `jobs` service is not authenticated.
+- We can see the logs of the `jobs` service to see what is happening.
+
+```bash
+kubectl logs jobs-54b647f788-qvpbg -n jobber
+[
+  {
+    meta: {
+      name: 'Fibonacci',
+      description: 'Generate a Fibonacci sequence and store it in the DB.'
+    },
+    discoveredClass: {
+      name: 'FibonacciJob',
+      instance: [FibonacciJob],
+      injectType: [class FibonacciJob extends AbstractJob],
+      dependencyType: [class FibonacciJob extends AbstractJob],
+      parentModule: [Object]
+    }
+  }
+]
+{"level":30,"time":1742618718080,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"LoggerModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"ClientsModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"ConfigHostModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"DiscoveryModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"PulsarModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"GraphQLSchemaBuilderModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"JobsModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"LoggerModule dependencies initialized"}
+{"level":30,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"InstanceLoader","msg":"GraphQLModule dependencies initialized"}
+{"level":40,"time":1742618718081,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"LegacyRouteConverter","msg":"Unsupported route path: \"/api/*\". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of \"path-to-regexp\" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with \"/users\", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert..."}
+.
+{"level":50,"time":1742622368266,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"GqlAuthGuard","err":{"type":"Error","message":"14 UNAVAILABLE: No connection established. Last error: connect ECONNREFUSED 127.0.0.1:5000 (2025-03-22T05:45:01.040Z)","stack":"Error: 14 UNAVAILABLE: No connection established. Last error: connect ECONNREFUSED 127.0.0.1:5000 (2025-03-22T05:45:01.040Z)\n    at callErrorFromStatus (/app/node_modules/@grpc/grpc-js/build/src/call.js:32:19)\n    at Object.onReceiveStatus (/app/node_modules/@grpc/grpc-js/build/src/client.js:193:76)\n    at Object.onReceiveStatus (/app/node_modules/@grpc/grpc-js/build/src/client-interceptors.js:361:141)\n    at Object.onReceiveStatus (/app/node_modules/@grpc/grpc-js/build/src/client-interceptors.js:324:181)\n    at /app/node_modules/@grpc/grpc-js/build/src/resolving-call.js:129:78\n    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)\nfor call at\n    at ServiceClientImpl.makeUnaryRequest (/app/node_modules/@grpc/grpc-js/build/src/client.js:161:32)\n    at ServiceClientImpl.<anonymous> (/app/node_modules/@grpc/grpc-js/build/src/make-client.js:105:19)\n    at Observable._subscribe (/app/node_modules/@nestjs/microservices/client/client-grpc.js:198:48)\n    at Observable._trySubscribe (/app/node_modules/rxjs/dist/cjs/internal/Observable.js:41:25)\n    at /app/node_modules/rxjs/dist/cjs/internal/Observable.js:35:31\n    at Object.errorContext (/app/node_modules/rxjs/dist/cjs/internal/util/errorContext.js:22:9)\n    at Observable.subscribe (/app/node_modules/rxjs/dist/cjs/internal/Observable.js:26:24)\n    at /app/node_modules/rxjs/dist/cjs/internal/operators/map.js:9:16\n    at OperatorSubscriber.<anonymous> (/app/node_modules/rxjs/dist/cjs/internal/util/lift.js:14:28)\n    at /app/node_modules/rxjs/dist/cjs/internal/Observable.js:30:30","code":14,"details":"No connection established. Last error: connect ECONNREFUSED 127.0.0.1:5000 (2025-03-22T05:45:01.040Z)","metadata":{}},"msg":"14 UNAVAILABLE: No connection established. Last error: connect ECONNREFUSED 127.0.0.1:5000 (2025-03-22T05:45:01.040Z)"}
+{"level":30,"time":1742622368267,"pid":1,"hostname":"jobs-54b647f788-qvpbg","context":"GqlLoggingPlugin","requestId":"a1f8fa3f-8ae4-48aa-83dd-02356b1ece96","query":"query {\n  jobsMetadata {\n    name\n    description\n  }\n}","statusCode":200,"duration":"3ms"}
+```
+
+- We can see the reason is that the `jobs` is not working because it is trying to connect to the `auth` service using `localhost` instead of expected `kubernetes url`.
+- We want to provide our auth `gRPC service name` here, so that we send the request to our gRPC server
+- We need to modify the `JobsModule` to use the `kubernetes url` to connect to the `auth` service.
+
+- We need to change the `.env` file to include the `AUTH_GRPC_SERVICE_URL` variable.
+
+> apps/jobs/.env
+
+```diff
+PORT=3001
+PULSAR_SERVICE_URL=pulsar://localhost:6650
++AUTH_GRPC_SERVICE_URL=localhost:5000
+```
+
+- We need to change the `deployment.yaml` file to include the `AUTH_GRPC_SERVICE_URL` variable.
+
+> charts/jobber/templates/jobs/deployment.yaml
+
+```diff
+{{- if .Values.jobs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs
+  labels:
+    app: jobs
+spec:
+  replicas: {{ .Values.jobs.replicas }}
+  selector:
+    matchLabels:
+      app: jobs
+  template:
+    metadata:
+      labels:
+        app: jobs
+    spec:
+      containers:
+        - name: jobs
+          image: {{ .Values.jobs.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.jobs.port }}
+          env:
+            {{- include "common.env" . | nindent 12 }}
++           - name: AUTH_GRPC_SERVICE_URL
++             value: "auth-grpc:{{ .Values.auth.port.grpc }}"
+            - name: PORT
+              value: "{{ .Values.jobs.port }}"
+
+{{- end }}
+```
+
+- We need to update the `JobsModule` to use the `AUTH_GRPC_SERVICE_URL` variable.
+
+> apps/jobs/src/app/jobs.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FibonacciJob } from './jobs/fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AUTH_PACKAGE_NAME } from '@jobber/grpc';
+import { join } from 'path';
+import { PulsarModule } from '@jobber/pulsar';
+
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
+    PulsarModule,
+    ClientsModule.registerAsync([
+      {
+        name: AUTH_PACKAGE_NAME,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('AUTH_GRPC_SERVICE_URL'),
+            package: AUTH_PACKAGE_NAME,
+            protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver],
+})
+export class JobsModule {}
+```
