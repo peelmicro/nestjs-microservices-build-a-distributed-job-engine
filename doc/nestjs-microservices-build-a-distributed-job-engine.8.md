@@ -1201,3 +1201,393 @@ Starting inspector on localhost:9229 failed: address already in use
 [Nest] 724321  - 22/03/2025, 16:25:36     LOG [NestApplication] Nest application successfully started +1ms
 [Nest] 724321  - 22/03/2025, 16:25:36     LOG 🚀 Application is running on: http://localhost:3000/api
 ```
+
+#### 12.3.2. Refactoring the `Products` service
+
+- We are going to remove the `app.controller.ts` and `app.service.ts` files.
+
+```bash
+rm -rf apps/products/src/app/app.controller.ts
+rm -rf apps/products/src/app/app.service.ts
+```
+
+- We are going to update the `app.module.ts` file to import the `LoggerModule` and the `ConfigModule`.
+
+> apps/products/src/app/app.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { LoggerModule } from '@jobber/nestjs';
+import { ConfigModule } from '@nestjs/config';
+@Module({
+  imports: [LoggerModule, ConfigModule.forRoot({ isGlobal: true })],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+- We are going to create a new `.env` file.
+
+> apps/products/.env
+
+```text
+PORT=3003
+```
+
+- We are going to update the `main.ts` file to use the `init` function.
+
+> apps/products/src/main.ts
+
+```ts
+require('module-alias/register');
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import { init } from '@jobber/nestjs';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  await init(app);
+}
+
+bootstrap();
+```
+
+- We are going to ensure the `products` service is running.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve products
+
+ NX   Running target serve for project products and 2 tasks it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run nestjs:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 2.58 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 2.58 KiB [entry] [rendered]
+webpack compiled successfully (09c76bbd450379d5)
+
+> nx run products:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 4.21 KiB [entry] [rendered]
+webpack compiled successfully (295893d6645b7a81)
+
+> nx run products:serve:development
+
+
+ NX   Running target build for project products and 1 task it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run nestjs:build  [existing outputs match the cache, left as is]
+
+
+> nx run products:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 4.21 KiB [entry] [rendered]
+webpack compiled successfully (295893d6645b7a81)
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project products and 1 task it depends on
+
+Nx read the output from the cache instead of running the command for 1 out of 2 tasks.
+
+Starting inspector on localhost:9229 failed: address already in use
+
+[16:37:04.399] INFO (750856): Starting Nest application... {"context":"NestFactory"}
+[16:37:04.399] INFO (750856): AppModule dependencies initialized {"context":"InstanceLoader"}
+[16:37:04.399] INFO (750856): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[16:37:04.399] INFO (750856): ConfigHostModule dependencies initialized {"context":"InstanceLoader"}
+[16:37:04.399] INFO (750856): ConfigModule dependencies initialized {"context":"InstanceLoader"}
+[16:37:04.399] INFO (750856): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[16:37:04.399] WARN (750856): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[16:37:04.399] WARN (750856): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[16:37:04.399] INFO (750856): Nest application successfully started {"context":"NestApplication"}
+[16:37:04.400] INFO (750856): 🚀 Application is running on: http://localhost:3003/api
+```
+
+### 12.4. Setting up `Drizzle` ORM
+
+#### 12.4.1. Adding the `Drizzle` ORM
+
+- We are going to create a new `package.json` file manually.
+
+> apps/products/package.json
+
+```json
+{
+  "name": "@jobber/products",
+  "version": "0.0.0",
+  "dependencies": {},
+  "devDependencies": {}
+}
+```
+
+- We are going to install the `Drizzle` ORM.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ npm i --save drizzle-orm pg --legacy-peer-deps
+
+added 11 packages, and audited 1431 packages in 7s
+
+231 packages are looking for funding
+  run `npm fund` for details
+
+4 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+```
+
+- We are going to install the `@types/pg` and `drizzle-kit` packages.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ npm i --save-dev @types/pg drizzle-kit --legacy-peer-deps
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+
+added 27 packages, and audited 1420 packages in 6s
+
+231 packages are looking for funding
+  run `npm fund` for details
+
+4 moderate severity vulnerabilities
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+```
+
+#### 12.4.2. Creating the `schema.ts` file
+
+- We are going to create a new `schema.ts` file.
+
+> apps/products/src/products/schema.ts
+
+```ts
+import { integer, pgTable, real, serial, text } from 'drizzle-orm/pg-core';
+
+export const products = pgTable('products', {
+  id: serial('id').primaryKey(),
+  name: text('name'),
+  category: text('category'),
+  price: real('price'),
+  stock: integer('stock'),
+  rating: real('rating'),
+  description: text('description'),
+});
+```
+
+#### 12.4.3. Creating the `database` module
+
+- We are going to create a new `database` module that will be used to connect to the database.
+- We need to update the `.env` file to include the `DATABASE_URL` environment variable.
+
+> apps/products/.env
+
+```text
+PORT=3003
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/products?schema=public
+```
+
+- We are going to create the `DATABASE_CONNECTION` token that we will use to inject the database connection in the `products` service.
+
+> apps/products/src/database/database-connection.ts
+
+```ts
+export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
+```
+
+- We are going to create the `database` module.
+
+> apps/products/src/database/database.module.ts
+
+```ts
+import { Global, Module } from '@nestjs/common';
+import { DATABASE_CONNECTION } from './database-connection';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as productsSchema from '../products/schema';
+import { ConfigService } from '@nestjs/config';
+
+@Global()
+@Module({
+  providers: [
+    {
+      provide: DATABASE_CONNECTION,
+      useFactory: (configService: ConfigService) => {
+        const pool = new Pool({
+          connectionString: configService.getOrThrow('DATABASE_URL'),
+        });
+        return drizzle(pool, {
+          schema: {
+            ...productsSchema,
+          },
+        });
+      },
+      inject: [ConfigService],
+    },
+  ],
+  exports: [DATABASE_CONNECTION],
+})
+export class DatabaseModule {}
+```
+
+- We are going to update the `app.module.ts` file to import the `DatabaseModule`.
+
+> apps/products/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { LoggerModule } from '@jobber/nestjs';
+import { ConfigModule } from '@nestjs/config';
++import { DatabaseModule } from './database/database.module';
+@Module({
+  imports: [
+    LoggerModule,
+    ConfigModule.forRoot({ isGlobal: true }),
++   DatabaseModule,
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+#### 12.4.4. Creating the `products` service
+
+- We are going to create a new `products` service.
+
+> apps/products/src/app/products/products.service.ts
+
+```ts
+import { Inject, Injectable } from '@nestjs/common';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './schema';
+import { DATABASE_CONNECTION } from '../database/database-connection';
+
+@Injectable()
+export class ProductsService {
+  constructor(
+    @Inject(DATABASE_CONNECTION)
+    private readonly database: NodePgDatabase<typeof schema>,
+  ) {}
+
+  async createProduct(product: Omit<typeof schema.products.$inferSelect, 'id'>) {
+    await this.database.insert(schema.products).values({
+      ...product,
+    });
+  }
+}
+```
+
+- We are going to create a new `products` module.
+
+> apps/products/src/app/products/products.module.ts
+
+```ts
+import { Module } from '@nestjs/common';
+import { ProductsService } from './products.service';
+
+@Module({
+  providers: [ProductsService],
+})
+export class ProductsModule {}
+```
+
+- We are going to update the `app.module.ts` file to import the `ProductsModule`.
+
+> apps/products/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { LoggerModule } from '@jobber/nestjs';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
++import { ProductsModule } from './products/products.module';
+@Module({
+  imports: [
++   ProductsModule,
+    LoggerModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+- We are going to ensure the `products` service is running.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx serve products
+
+ NX   Running target serve for project products and 2 tasks it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run nestjs:build
+
+> webpack-cli build --node-env=production
+
+chunk (runtime: index) index.js (index) 2.58 KiB [entry] [rendered]
+chunk (runtime: main) main.js (main) 2.58 KiB [entry] [rendered]
+webpack compiled successfully (09c76bbd450379d5)
+
+> nx run products:build
+
+> webpack-cli build node-env=production
+
+chunk (runtime: main) main.js (main) 8.66 KiB [entry] [rendered]
+webpack compiled successfully (ec03775917c515b7)
+
+> nx run products:serve:development
+
+
+ NX   Running target build for project products and 1 task it depends on:
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+> nx run nestjs:build  [existing outputs match the cache, left as is]
+
+
+> nx run products:build:development
+
+> webpack-cli build node-env=development
+
+chunk (runtime: main) main.js (main) 8.66 KiB [entry] [rendered]
+webpack compiled successfully (ec03775917c515b7)
+
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target build for project products and 1 task it depends on
+
+Nx read the output from the cache instead of running the command for 1 out of 2 tasks.
+
+Starting inspector on localhost:9229 failed: address already in use
+
+[17:43:22.831] INFO (902925): Starting Nest application... {"context":"NestFactory"}
+[17:43:22.831] INFO (902925): AppModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): ConfigHostModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): ConfigModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): DatabaseModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): ProductsModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] INFO (902925): LoggerModule dependencies initialized {"context":"InstanceLoader"}
+[17:43:22.831] WARN (902925): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[17:43:22.831] WARN (902925): Unsupported route path: "/api/*". In previous versions, the symbols ?, *, and + were used to denote optional or repeating path parameters. The latest version of "path-to-regexp" now requires the use of named parameters. For example, instead of using a route like /users/* to capture all routes starting with "/users", you should use /users/*path. For more details, refer to the migration guide. Attempting to auto-convert... {"context":"LegacyRouteConverter"}
+[17:43:22.831] INFO (902925): Nest application successfully started {"context":"NestApplication"}
+[17:43:22.832] INFO (902925): 🚀 Application is running on: http://localhost:3003/api
+```
