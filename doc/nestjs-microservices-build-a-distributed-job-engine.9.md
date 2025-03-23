@@ -1384,3 +1384,143 @@ Using 'pg' driver for database querying
 - We can see the `categories` table has been populated with the following data:
 
 ![categories table](images039.png)
+
+### 12.15 Creating the `Products Dockerfile` document
+
+#### 12.15.1. We are going to create the `Dockerfile` file
+
+> apps/products/Dockerfile
+
+```dockerfile
+# Builder Stage
+FROM node:22-slim AS builder
+
+WORKDIR /workspace
+
+# Copy necessary files for building the app
+COPY package*.json ./
+COPY nx.json ./
+COPY tsconfig*.json ./
+COPY jest.config.ts ./
+COPY jest.preset.js ./
+COPY eslint.config.mjs ./
+COPY webpack.*.config.js ./
+
+COPY apps/products ./apps/products
+COPY libs/grpc ./libs/grpc
+COPY libs/nestjs ./libs/nestjs
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+RUN apt-get update && apt-get install -y protobuf-compiler
+
+# Build the app
+RUN npx nx build products
+
+# Runner Stage
+FROM node:22-slim AS runner
+
+WORKDIR /app
+
+# Copy necessary files
+COPY --from=builder /workspace/package.json ./
+COPY --from=builder /workspace/apps/products/package.json ./apps/products/package.json
+COPY --from=builder /workspace/libs/grpc/package.json ./libs/grpc/package.json
+COPY --from=builder /workspace/apps/products/drizzle.config.ts ./apps/products/drizzle.config.ts
+COPY --from=builder /workspace/apps/products/drizzle ./apps/products/drizzle
+COPY --from=builder /workspace/package-lock.json ./
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Install production dependencies
+RUN npm ci --legacy-peer-deps
+
+# Copy build output and other files
+COPY --from=builder /workspace/dist ./dist
+
+# Run the application
+CMD ["node", "dist/apps/products/main"]
+```
+
+#### 12.15.2. We are going to build the `Products Dockerfile` to ensure the Dockerfile is correct
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ docker build -t products -f apps/products/Dockerfile .
+[+] Building 64.5s (29/29) FINISHED                                                                                                                 docker:default
+ => [internal] load build definition from Dockerfile                                                                                                          0.0s
+ => => transferring dockerfile: 1.35kB                                                                                                                        0.0s
+ => [internal] load metadata for docker.io/library/node:22-slim                                                                                               0.6s
+ => [internal] load .dockerignore                                                                                                                             0.0s
+ => => transferring context: 57B                                                                                                                              0.0s
+ => [builder  1/15] FROM docker.io/library/node:22-slim@sha256:bac8ff0b5302b06924a5e288fb4ceecef9c8bb0bb92515985d2efdc3a2447052                               6.6s
+ => => resolve docker.io/library/node:22-slim@sha256:bac8ff0b5302b06924a5e288fb4ceecef9c8bb0bb92515985d2efdc3a2447052                                         0.0s
+ => => sha256:6e909acdb790c5a1989d9cfc795fda5a246ad6664bb27b5c688e2b734b2c5fad 28.20MB / 28.20MB                                                              3.2s
+ => => sha256:d714f4673cad3750083007b710a3d74ea21d34db71daaa04e44bafafb9d58445 3.31kB / 3.31kB                                                                0.4s
+ => => sha256:be84add755f800c3580c34f5f0e56856b96013886d9bfd3f08b0f0d957b77466 48.31MB / 48.31MB                                                              3.4s
+ => => sha256:bac8ff0b5302b06924a5e288fb4ceecef9c8bb0bb92515985d2efdc3a2447052 6.49kB / 6.49kB                                                                0.0s
+ => => sha256:483b3a6c706e268e57920ab906f72564ecb1dbc715607aa9b26cfa2a43d6e65d 1.93kB / 1.93kB                                                                0.0s
+ => => sha256:deef14d1e279853b37d4334712a0fc0a94c8832862c6db075d54f644d60bdbbc 6.54kB / 6.54kB                                                                0.0s
+ => => sha256:9a8d89ceeab1eb03867d4edc7c38bf07c9277acb361a5973c71c00fb4d222901 1.71MB / 1.71MB                                                                1.0s
+ => => sha256:4c07c1809c8eebaab536b60272897848a5b72b4451b9e51bc7118d5aef302f75 448B / 448B                                                                    1.3s
+ => => extracting sha256:6e909acdb790c5a1989d9cfc795fda5a246ad6664bb27b5c688e2b734b2c5fad                                                                     1.1s
+ => => extracting sha256:d714f4673cad3750083007b710a3d74ea21d34db71daaa04e44bafafb9d58445                                                                     0.0s
+ => => extracting sha256:be84add755f800c3580c34f5f0e56856b96013886d9bfd3f08b0f0d957b77466                                                                     1.9s
+ => => extracting sha256:9a8d89ceeab1eb03867d4edc7c38bf07c9277acb361a5973c71c00fb4d222901                                                                     0.1s
+ => => extracting sha256:4c07c1809c8eebaab536b60272897848a5b72b4451b9e51bc7118d5aef302f75                                                                     0.0s
+ => [internal] load build context                                                                                                                             0.0s
+ => => transferring context: 6.18kB                                                                                                                           0.0s
+ => [builder  2/15] WORKDIR /workspace                                                                                                                        0.2s
+ => [runner  2/10] WORKDIR /app                                                                                                                               0.3s
+ => [builder  3/15] COPY package*.json ./                                                                                                                     0.0s
+ => [builder  4/15] COPY nx.json ./                                                                                                                           0.0s
+ => [builder  5/15] COPY tsconfig*.json ./                                                                                                                    0.0s
+ => [builder  6/15] COPY jest.config.ts ./                                                                                                                    0.0s
+ => [builder  7/15] COPY jest.preset.js ./                                                                                                                    0.0s
+ => [builder  8/15] COPY eslint.config.mjs ./                                                                                                                 0.0s
+ => [builder  9/15] COPY webpack.*.config.js ./                                                                                                               0.0s
+ => [builder 10/15] COPY apps/products ./apps/products                                                                                                        0.0s
+ => [builder 11/15] COPY libs/grpc ./libs/grpc                                                                                                                0.0s
+ => [builder 12/15] COPY libs/nestjs ./libs/nestjs                                                                                                            0.0s
+ => [builder 13/15] RUN npm install --legacy-peer-deps                                                                                                       18.1s
+ => [builder 14/15] RUN apt-get update && apt-get install -y protobuf-compiler                                                                                9.9s
+ => [builder 15/15] RUN npx nx build products                                                                                                                16.0s
+ => [runner  3/10] COPY --from=builder /workspace/package.json ./                                                                                             0.1s
+ => [runner  4/10] COPY --from=builder /workspace/apps/products/package.json ./apps/products/package.json                                                     0.0s
+ => [runner  5/10] COPY --from=builder /workspace/libs/grpc/package.json ./libs/grpc/package.json                                                             0.0s
+ => [runner  6/10] COPY --from=builder /workspace/apps/products/drizzle.config.ts ./apps/products/drizzle.config.ts                                           0.0s
+ => [runner  7/10] COPY --from=builder /workspace/apps/products/drizzle ./apps/products/drizzle                                                               0.0s
+ => [runner  8/10] COPY --from=builder /workspace/package-lock.json ./                                                                                        0.0s
+ => [runner  9/10] RUN npm ci --legacy-peer-deps                                                                                                              9.4s
+ => [runner 10/10] COPY --from=builder /workspace/dist ./dist                                                                                                 0.0s
+ => exporting to image                                                                                                                                        2.0s
+ => => exporting layers                                                                                                                                       2.0s
+ => => writing image sha256:077414326bd8533ffd10806a200539169f16e9a8db3ddc8cd128c08fdf7af3ac                                                                  0.0s
+ => => naming to docker.io/library/products
+```
+
+#### 12.15.3. We are going to modify the `Elastic Container Registry (ECR)` to include the `products` image
+
+![Create Repository](images039.png)
+
+![Put the name of the repository](images040.png)
+
+![Ensure it has been created](images041.png)
+
+#### 12.15.4 Modify the Github Actions to include the `products` image
+
+> .github/workflows/ci.yml
+
+```diff
+.
+      - name: Build and push all images to ECR
+        run: |
+          IMAGES=(
+            "jobs apps/jobs/Dockerfile"
+            "executor apps/executor/Dockerfile"
+            "auth apps/auth/Dockerfile"
++           "products apps/products/Dockerfile"
+          )
+.
+```
