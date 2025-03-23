@@ -538,3 +538,379 @@ export class ProductsController implements ProductsServiceController {
   }
 }
 ```
+
+### 12.7. Setting up the `products` job inside the `jobs` service
+
+- The same that we did for the `Fibonacci` job, we need to create a new job for the `Products` in the `jobs` service.
+
+#### 12.7.1. Create the `load-products.message.ts` file
+
+> libs/pulsar/src/lib/messages/load-products.message.ts
+
+```typescript
+import { IsInt, IsNotEmpty, IsNumber, IsString, Max, Min } from 'class-validator';
+import { JobMessage } from './job.message';
+
+export class LoadProductsMessage extends JobMessage {
+  @IsString()
+  @IsNotEmpty()
+  name: string | undefined;
+
+  @IsString()
+  @IsNotEmpty()
+  category: string | undefined;
+
+  @IsNumber()
+  @Min(0)
+  price: number | undefined;
+
+  @IsInt()
+  @Min(0)
+  stock: number | undefined;
+
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  rating: number | undefined;
+
+  @IsString()
+  @IsNotEmpty()
+  description: string | undefined;
+}
+```
+
+#### 12.7.2. Create the `load-products.job.ts` file
+
+> apps/jobs/src/app/jobs/products/load-products.job.ts
+
+```typescript
+import { Jobs } from '@jobber/nestjs';
+import { Job } from '../../decorators/job.decorator';
+import { AbstractJob } from '../abstract.job';
+import { LoadProductsMessage, PulsarClient } from '@jobber/pulsar';
+// import { PrismaService } from '../../prisma/prisma.service';
+
+@Job({
+  name: Jobs.LOAD_PRODUCTS,
+  description: 'Loads uploaded product data into the DB after enrichment.',
+})
+export class LoadProductsJob extends AbstractJob<LoadProductsMessage> {
+  protected messageClass = LoadProductsMessage;
+
+  constructor(
+    pulsarClient: PulsarClient,
+    // prismaService: PrismaService
+  ) {
+    super(
+      pulsarClient,
+      // prismaService
+    );
+  }
+}
+```
+
+#### 12.7.3. Update the `jobs.module.ts` file
+
+> apps/jobs/src/app/jobs.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FibonacciJob } from './jobs/fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { Packages } from '@jobber/grpc';
+import { join } from 'path';
+import { PulsarModule } from '@jobber/pulsar';
+import { LoadProductsJob } from './jobs/products/load-products.job';
+
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
+    PulsarModule,
+    ClientsModule.registerAsync([
+      {
+        name: Packages.AUTH,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('AUTH_GRPC_SERVICE_URL'),
+            package: Packages.AUTH,
+            protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver, LoadProductsJob],
+})
+export class JobsModule {}
+```
+
+### 12.8 Modify the `abstract.job.ts` file to make it work asynchronously
+
+> apps/jobs/src/app/job.http
+
+```typescript
+import { Producer } from 'pulsar-client';
+import { PulsarClient, serialize } from '@jobber/pulsar';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
+export abstract class AbstractJob<T extends object> {
+  private producer: Producer;
+  protected abstract messageClass: new () => T;
+
+  constructor(private readonly pulsarClient: PulsarClient) {}
+
+  async execute(data: T, name: string) {
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    if (Array.isArray(data)) {
+      for (const message of data) {
+        this.send(message);
+      }
+      return;
+    }
+    this.send(data);
+  }
+
+  private send(data: T) {
+    this.validateData(data).then(() => this.producer.send({ data: serialize(data) }));
+  }
+
+  private async validateData(data: T) {
+    const errors = await validate(plainToInstance(this.messageClass, data));
+    if (errors.length) {
+      throw new BadRequestException(`Job data is invalid: ${JSON.stringify(errors, null, 2)}`);
+    }
+  }
+}
+```
+
+### 12.9 Update the `jobs.service.ts` file to include the `LoadProductsJob`
+
+> apps/jobs/src/app/jobs.service.ts
+
+```typescript
+import { DiscoveredClassWithMeta, DiscoveryService } from '@golevelup/nestjs-discovery';
+import { BadRequestException, Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { JOB_METADATA_KEY } from './decorators/job.decorator';
+import { JobMetadata } from './interfaces/job-metadata.interface';
+import { AbstractJob } from './jobs/abstract.job';
+import { readFileSync } from 'fs';
+import { UPLOAD_FILE_PATH } from './uploads/upload';
+
+@Injectable()
+export class JobsService implements OnModuleInit {
+  private jobs: DiscoveredClassWithMeta<JobMetadata>[] = [];
+
+  constructor(private readonly discoveryService: DiscoveryService) {}
+
+  async onModuleInit() {
+    this.jobs = await this.discoveryService.providersWithMetaAtKey<JobMetadata>(JOB_METADATA_KEY);
+    console.log(this.jobs);
+  }
+
+  getJobsMetadata() {
+    return this.jobs.map((job) => job.meta);
+  }
+
+  async executeJob(name: string, data?: any) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+    if (!(job.discoveredClass.instance instanceof AbstractJob)) {
+      throw new InternalServerErrorException('Job is not an instance of AbstractJob.');
+    }
+    return job.discoveredClass.instance.execute(data?.fileName ? this.getFile(data.fileName) : data || {}, job.meta.name);
+  }
+
+  getJobByName(name: string) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+
+    // Return a Job object with the metadata
+    return {
+      name: job.meta.name,
+      description: job.meta.description,
+    };
+  }
+
+  private getFile(fileName?: string) {
+    if (!fileName) {
+      return;
+    }
+    try {
+      return JSON.parse(readFileSync(`${UPLOAD_FILE_PATH}/${fileName}`, 'utf-8'));
+    } catch (err) {
+      throw new InternalServerErrorException(`Failed to read file: ${fileName}`);
+    }
+  }
+}
+```
+
+### 12.10 Update the `job.http` file to include the `LoadProductsJob`
+
+> apps/jobs/src/app/job.http
+
+```http
+@urlLogin = http://localhost:3000/graphql
+
+@urlRest = http://localhost:3001/api
+@url = http://localhost:3001/graphql
+
+### Login
+# @name login
+POST {{urlLogin}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
+
+### Get jobs metadata
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobsMetadata {
+    name
+    description
+  }
+}
+
+### Execute Fibonacci job with invalid name
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Bad"}) {
+    name
+  }
+}
+
+### Execute Fibonacci job with one message
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iterations: 40}}) {
+    name
+  }
+}
+
+### Execute Fibonacci job with multiple messages
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: [{iterations: 40}, {iterations: 41}]}) {
+    name
+  }
+}
+
+
+### Execute Fibonacci job with invalid data
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "Fibonacci", data: {iteration: 40}}) {
+    name
+  }
+}
+
+### Upload file
+POST {{urlRest}}/uploads/upload
+Content-Type: multipart/form-data ; boundary=MfnBoundry
+
+--MfnBoundry
+Content-Disposition: form-data; name="file"; filename="products.json"
+Content-Type: application/json
+
+< ./data/products.json
+
+--MfnBoundry--
+
+
+### Execute Load Products job with one filename
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+    name
+  }
+}
+```
+
+### 12.11 Test if the new job is working
+
+- When we execute the new request, we should see it works:
+
+> Request:
+
+```http
+### Execute Load Products job with one filename
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+    name
+  }
+}
+```
+
+> Response:
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 48
+ETag: W/"30-/M4kLcVyISYwL5nFCGTaXBJBQDM"
+Date: Sun, 23 Mar 2025 12:59:45 GMT
+Connection: close
+
+{
+  "data": {
+    "executeJob": {
+      "name": "LoadProducts"
+    }
+  }
+}
+```

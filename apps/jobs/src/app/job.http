@@ -33,7 +33,7 @@ query {
   }
 }
 
-### Execute job with invalid name
+### Execute Fibonacci job with invalid name
 POST {{url}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
@@ -45,7 +45,7 @@ mutation {
   }
 }
 
-### Execute job with one message
+### Execute Fibonacci job with one message
 POST {{url}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
@@ -57,7 +57,7 @@ mutation {
   }
 }
 
-### Execute job with multiple messages
+### Execute Fibonacci job with multiple messages
 POST {{url}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
@@ -70,7 +70,7 @@ mutation {
 }
 
 
-### Execute job with invalid data
+### Execute Fibonacci job with invalid data
 POST {{url}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
@@ -95,3 +95,14 @@ Content-Type: application/json
 --MfnBoundry--
 
 
+### Execute Load Products job with one filename
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+    name
+  }
+}

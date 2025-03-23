@@ -11,6 +11,8 @@ import {
 import { JOB_METADATA_KEY } from './decorators/job.decorator';
 import { JobMetadata } from './interfaces/job-metadata.interface';
 import { AbstractJob } from './jobs/abstract.job';
+import { readFileSync } from 'fs';
+import { UPLOAD_FILE_PATH } from './uploads/upload';
 
 @Injectable()
 export class JobsService implements OnModuleInit {
@@ -40,7 +42,10 @@ export class JobsService implements OnModuleInit {
         'Job is not an instance of AbstractJob.',
       );
     }
-    return job.discoveredClass.instance.execute(data || {}, job.meta.name);
+    return job.discoveredClass.instance.execute(
+      data?.fileName ? this.getFile(data.fileName) : data || {},
+      job.meta.name,
+    );
   }
 
   getJobByName(name: string) {
@@ -54,5 +59,20 @@ export class JobsService implements OnModuleInit {
       name: job.meta.name,
       description: job.meta.description,
     };
+  }
+
+  private getFile(fileName?: string) {
+    if (!fileName) {
+      return;
+    }
+    try {
+      return JSON.parse(
+        readFileSync(`${UPLOAD_FILE_PATH}/${fileName}`, 'utf-8'),
+      );
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `Failed to read file: ${fileName}`,
+      );
+    }
   }
 }

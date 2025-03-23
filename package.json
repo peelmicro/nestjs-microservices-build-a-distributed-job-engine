@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "serve:all": "nx run-many -t serve -p auth jobs executor",
-    "build:all": "nx run-many -t build -p auth jobs executor"
+    "serve:all": "nx run-many -t serve -p auth jobs executor products --parallel 4",
+    "build:all": "nx run-many -t build -p auth jobs executor products --parallel 4"
   },
   "workspaces": [
     "apps/*",
