@@ -1524,3 +1524,19 @@ juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-buil
           )
 .
 ```
+
+#### 12.15.5 We are going to modify the `Products wepack.config.js` file to use the `commonConfig` file
+
+> apps/products/webpack.config.js
+
+```js
+const { join } = require('path');
+const { merge } = require('webpack-merge');
+const commonConfig = require('../../webpack.app.config');
+
+module.exports = merge(commonConfig, {
+  output: {
+    path: join(__dirname, '../../dist/apps/products'),
+  },
+});
+```
