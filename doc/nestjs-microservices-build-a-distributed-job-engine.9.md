@@ -1041,3 +1041,111 @@ Connection: close
   "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
 } {"context":"LoadProducts"}
 ```
+
+### 12.13 Set up a gRPC client to process the `products` job
+
+#### 12.13.1 Update the `.env` file to include the `PRODUCTS_GRPC_SERVICE_URL`
+
+> apps/executor/.env
+
+```text
+PORT=3002
+PULSAR_SERVICE_URL=pulsar://localhost:6650
+PRODUCTS_GRPC_SERVICE_URL=localhost:5001
+```
+
+#### 12.13.2. Update the `load-products.consumer.ts` file
+
+> apps/executor/src/app/jobs/products/load-products.consumer.ts
+
+```typescript
+import { Packages, PRODUCTS_SERVICE_NAME, ProductsServiceClient } from '@jobber/grpc';
+import { Jobs } from '@jobber/nestjs';
+import { LoadProductsMessage, PulsarClient, PulsarConsumer } from '@jobber/pulsar';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable()
+export class LoadProductsConsumer extends PulsarConsumer<LoadProductsMessage> implements OnModuleInit {
+  private productsService: ProductsServiceClient;
+
+  constructor(
+    pulsarClient: PulsarClient,
+    @Inject(Packages.PRODUCTS) private clientProducts: ClientGrpc,
+  ) {
+    super(pulsarClient, Jobs.LOAD_PRODUCTS);
+  }
+
+  async onModuleInit() {
+    this.productsService = this.clientProducts.getService<ProductsServiceClient>(PRODUCTS_SERVICE_NAME);
+    await super.onModuleInit();
+  }
+
+  protected async onMessage(data: LoadProductsMessage): Promise<void> {
+    await firstValueFrom(this.productsService.createProduct(data));
+  }
+}
+```
+
+#### 12.13.3. Update the `load-products.module.ts` file
+
+> apps/executor/src/app/jobs/products/load-products.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { LoadProductsConsumer } from './load-products.consumer';
+import { PulsarModule } from '@jobber/pulsar';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { Packages } from '@jobber/grpc';
+import { ConfigService } from '@nestjs/config';
+import { join } from 'path';
+
+@Module({
+  imports: [
+    PulsarModule,
+    ClientsModule.registerAsync([
+      {
+        name: Packages.PRODUCTS,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('PRODUCTS_GRPC_SERVICE_URL'),
+            package: Packages.PRODUCTS,
+            protoPath: join(__dirname, '../../libs/grpc/proto/products.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  providers: [LoadProductsConsumer],
+})
+export class LoadProductModule {}
+```
+
+#### 12.13.4. Test if the new job is working
+
+- Executing the request again, we should see the logs in the `executor` service.
+
+```bash
+
+[14:46:50.501] DEBUG (508683): Received message: {
+  "name": "Portable Charger",
+  "category": "Electronics",
+  "price": 249.81,
+  "stock": 182,
+  "rating": 3.6,
+  "description": "Compact and powerful portable charger for your devices on the go."
+} {"context":"LoadProducts"}
+[14:46:50.502] INFO (508684): {"context":"GrpcLoggingInterceptor","requestId":"1b1841d0-ec0e-4226-aae7-62b3d9a7b534","handler":"createProduct","args":{"name":"Portable Charger","category":"Electronics","price":249.80999755859375,"stock":182,"rating":3.5999999046325684,"description":"Compact and powerful portable charger for your devices on the go."}}
+.
+```
+
+- We can see the database has been updated.
+
+![products table](images037.png)
+
+### 12.14 Add a new job to process the `orders`
+
+#### 12.14.1 Update the `.env` file to include the `ORDERS_GRPC_SERVICE_URL`
