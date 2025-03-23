@@ -1146,6 +1146,241 @@ export class LoadProductModule {}
 
 ![products table](images037.png)
 
-### 12.14 Add a new job to process the `orders`
+### 12.14 Creating the new `categories` table
 
-#### 12.14.1 Update the `.env` file to include the `ORDERS_GRPC_SERVICE_URL`
+- We will create a new table to store the categories of the products.
+- And we will modify the `products` table to include the category id.
+
+#### 12.14.1. Create the `categories` schema
+
+> apps/products/src/app/categories/schema.ts
+
+```typescript
+import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
+
+export const categories = pgTable('categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').unique(),
+  charge: integer('charge'),
+});
+```
+
+#### 12.14.2. Create the `categories` service
+
+> apps/products/src/app/categories/categories.service.ts
+
+```typescript
+import { Inject, Injectable } from '@nestjs/common';
+import { DATABASE_CONNECTION } from '../database/database-connection';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './schema';
+import { eq } from 'drizzle-orm';
+
+@Injectable()
+export class CategoriesService {
+  constructor(
+    @Inject(DATABASE_CONNECTION)
+    private readonly database: NodePgDatabase<typeof schema>,
+  ) {}
+
+  async getCategoryByName(name: string) {
+    return this.database.query.categories.findFirst({
+      where: eq(schema.categories.name, name),
+    });
+  }
+}
+```
+
+#### 12.14.3. Create the `categories` module
+
+> apps/products/src/app/categories/categories.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { CategoriesService } from './categories.service';
+
+@Module({
+  providers: [CategoriesService],
+  exports: [CategoriesService],
+})
+export class CategoriesModule {}
+```
+
+#### 12.14.4. Update the `database` module to include the `categories` module
+
+> apps/products/src/app/database/database.module.ts
+
+```typescript
+import { Global, Module } from '@nestjs/common';
+import { DATABASE_CONNECTION } from './database-connection';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as productsSchema from '../products/schema';
+import * as categoriesSchema from '../categories/schema';
+import { ConfigService } from '@nestjs/config';
+
+@Global()
+@Module({
+  providers: [
+    {
+      provide: DATABASE_CONNECTION,
+      useFactory: (configService: ConfigService) => {
+        const pool = new Pool({
+          connectionString: configService.getOrThrow('DATABASE_URL'),
+        });
+        return drizzle(pool, {
+          schema: {
+            ...productsSchema,
+            ...categoriesSchema,
+          },
+        });
+      },
+      inject: [ConfigService],
+    },
+  ],
+  exports: [DATABASE_CONNECTION],
+})
+export class DatabaseModule {}
+```
+
+#### 12.14.5. Update the `products` module to include the `categories` module
+
+> apps/products/src/app/products/products.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ProductsService } from './products.service';
+import { ProductsController } from './products.controller';
+import { CategoriesModule } from '../categories/categories.module';
+
+@Module({
+  imports: [CategoriesModule],
+  controllers: [ProductsController],
+  providers: [ProductsService],
+})
+export class ProductsModule {}
+```
+
+#### 12.14.6. Update the `products` service to include the `categories` service
+
+> apps/products/src/app/products/products.service.ts
+
+```typescript
+import { Inject, Injectable } from '@nestjs/common';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './schema';
+import { DATABASE_CONNECTION } from '../database/database-connection';
+import { CategoriesService } from '../categories/categories.service';
+
+@Injectable()
+export class ProductsService {
+  constructor(
+    @Inject(DATABASE_CONNECTION)
+    private readonly database: NodePgDatabase<typeof schema>,
+    private readonly categoriesService: CategoriesService,
+  ) {}
+
+  async createProduct(product: Omit<typeof schema.products.$inferSelect, 'id'>) {
+    const category = await this.categoriesService.getCategoryByName(product.category);
+    await this.database.insert(schema.products).values({
+      ...product,
+      price: category ? product.price + category.charge : product.price,
+    });
+  }
+}
+```
+
+#### 12.14.7. Create a pg script to create the `categories` table by using `nx generate-drizzle products` service
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx generate-drizzle products
+
+> nx run products:generate-drizzle
+
+> drizzle-kit generate
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+2 tables
+categories 3 columns 0 indexes 0 fks
+products 7 columns 0 indexes 0 fks
+
+[✓] Your SQL migration file ➜ drizzle/0001_organic_galactus.sql 🚀
+
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target generate-drizzle for project products (706ms)
+```
+
+#### 12.14.8. Execute the pg script to create the `categories` table by using `nx migrate-drizzle products` service
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx migrate-drizzle products
+
+> nx run products:migrate-drizzle
+
+> drizzle-kit migrate
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] migrations applied successfully!
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target migrate-drizzle for project products
+```
+
+- We can see the `categories` table has been created.
+
+![categories table](images038.png)
+
+#### 12.14.9. Add new categories to the `categories` table by using `drizzle-kit generate`
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ npx drizzle-kit generate --custom --name=seed-categories
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+Prepared empty file for your custom SQL migration!
+[✓] Your SQL migration file ➜ drizzle/0002_seed-categories.sql
+```
+
+- We can populate the `0002_seed-categories.sql` file with the following data:
+
+> apps/products/drizzle/0002_seed-categories.sql
+
+```sql
+-- Custom SQL migration file, put your code below! --
+INSERT INTO categories (name, charge) VALUES
+  ('Electronics', 5),
+  ('Apparel', 3),
+  ('Home & Kitchen', 4),
+  ('Grocery', 2),
+  ('Furniture', 6),
+  ('Sports & Outdoors', 4),
+  ('Health & Beauty', 3),
+  ('Office Supplies', 4),
+  ('Toys & Games', 3)
+ON CONFLICT (name) DO NOTHING;
+```
+
+#### 12.14.10. Execute the pg script to create the `categories` table by using `nx migrate-drizzle products` service
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ nx migrate-drizzle products
+
+> nx run products:migrate-drizzle
+
+> drizzle-kit migrate
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] migrations applied successfully!
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target migrate-drizzle for project products (480ms)
+```
+
+- We can see the `categories` table has been populated with the following data:
+
+![categories table](images039.png)
