@@ -914,3 +914,130 @@ Connection: close
   }
 }
 ```
+
+- We can see that the job is executed successfully.
+
+### 12.12 Modify the `executor` service to process the `products` job
+
+#### 12.12.1. Create the `load-products.consumer.ts` file
+
+> apps/executor/src/app/jobs/products/load-products.consumer.ts
+
+```typescript
+import { Jobs } from '@jobber/nestjs';
+import { LoadProductsMessage, PulsarClient, PulsarConsumer } from '@jobber/pulsar';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+
+@Injectable()
+export class LoadProductsConsumer extends PulsarConsumer<LoadProductsMessage> implements OnModuleInit {
+  constructor(pulsarClient: PulsarClient) {
+    super(pulsarClient, Jobs.LOAD_PRODUCTS);
+  }
+
+  protected async onMessage(data: LoadProductsMessage): Promise<void> {
+    this.logger.log(`LoadProductsConsumer: ${JSON.stringify(data, null, 2)}`);
+  }
+}
+```
+
+#### 12.12.2. Create the `load-products.module.ts` file
+
+> apps/executor/src/app/jobs/products/load-products.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { LoadProductsConsumer } from './load-products.consumer';
+import { PulsarModule } from '@jobber/pulsar';
+
+@Module({
+  imports: [PulsarModule],
+  providers: [LoadProductsConsumer],
+})
+export class LoadProductModule {}
+```
+
+#### 12.12.3. Update the `jobs.module.ts` file to include the `LoadProductModule`
+
+> apps/executor/src/app/jobs/jobs.module.ts
+
+```typescript
+import { PulsarModule } from '@jobber/pulsar';
+import { Module } from '@nestjs/common';
+import { FibonacciConsumer } from './fibonacci/fibonacci.consumer';
+import { LoadProductModule } from './products/load-products.module';
+
+@Module({
+  imports: [PulsarModule, LoadProductModule],
+  providers: [FibonacciConsumer],
+})
+export class JobsModule {}
+```
+
+#### 12.12.4 Test if the new job is working
+
+> Request
+
+```http
+### Execute Load Products job with one filename
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+    name
+  }
+}
+```
+
+> Response
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 48
+ETag: W/"30-/M4kLcVyISYwL5nFCGTaXBJBQDM"
+Date: Sun, 23 Mar 2025 13:43:55 GMT
+Connection: close
+
+{
+  "data": {
+    "executeJob": {
+      "name": "LoadProducts"
+    }
+  }
+}
+```
+
+- We can see the logs in the `executor` service.
+
+```bash
+.
+[13:44:02.896] INFO (418525): LoadProductsConsumer: {
+  "name": "Smart Watch",
+  "category": "Electronics",
+  "price": 150.88,
+  "stock": 258,
+  "rating": 3.5,
+  "description": "Track your fitness, receive notifications, and more with this sleek smartwatch."
+} {"context":"LoadProducts"}
+[13:44:02.897] DEBUG (418525): Received message: {
+  "name": "Stainless Steel Water Bottle",
+  "category": "Home & Kitchen",
+  "price": 247.84,
+  "stock": 147,
+  "rating": 4.7,
+  "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+} {"context":"LoadProducts"}
+[13:44:02.897] INFO (418525): LoadProductsConsumer: {
+  "name": "Stainless Steel Water Bottle",
+  "category": "Home & Kitchen",
+  "price": 247.84,
+  "stock": 147,
+  "rating": 4.7,
+  "description": "Keeps beverages hot or cold for hours, perfect for outdoor activities."
+} {"context":"LoadProducts"}
+```
