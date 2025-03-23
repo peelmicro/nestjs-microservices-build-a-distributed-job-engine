@@ -1591,3 +1591,160 @@ Starting inspector on localhost:9229 failed: address already in use
 [17:43:22.831] INFO (902925): Nest application successfully started {"context":"NestApplication"}
 [17:43:22.832] INFO (902925): 🚀 Application is running on: http://localhost:3003/api
 ```
+
+#### 12.4.5. Implementing `Drizzle Kit Migrations`
+
+##### 12.4.5.1. Creating the `drizzle.config.ts` file
+
+- We need to create the `drizzle.config.ts` file.
+
+> apps/products/drizzle.config.ts
+
+```ts
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/**/schema.ts',
+  out: './drizzle',
+  dialect: 'postgresql',
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```
+
+- We are going to use the `drizzle-kit` command to create the migrations.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ npx drizzle-kit generate
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+1 tables
+products 7 columns 0 indexes 0 fks
+
+[✓] Your SQL migration file ➜ drizzle/0000_wandering_tigra.sql
+```
+
+- We can see the migration file in the `drizzle` folder.
+
+> apps/products/drizzle/0000_wandering_tigra.sql
+
+```sql
+CREATE TABLE "products" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "name" text,
+  "category" text,
+  "price" real,
+  "stock" integer,
+  "rating" real,
+  "description" text
+);
+```
+
+- Once we have create the `products` database using a tool like `DBeaver`, we are going to use the `drizzle-kit` command to apply the migrations.
+- We are going to use the `drizzle-kit` command to apply the migrations.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ npx drizzle-kit migrate
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+Using 'pg' driver for database querying
+```
+
+##### 12.4.5.2. Updating the `project.json` file to include the `Drizzle` commands
+
+- We are going to update the `project.json` file to include the `Drizzle` commands.
+
+> apps/products/project.json
+
+```diff
+{
+  "name": "products",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/products/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "webpack-cli build",
+        "args": ["node-env=production"]
+      },
+      "configurations": {
+        "development": {
+          "args": ["node-env=development"]
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "products:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "products:build:development"
+        },
+        "production": {
+          "buildTarget": "products:build:production"
+        }
+      }
+    },
++   "generate-drizzle": {
++     "command": "drizzle-kit generate",
++     "options": {
++       "cwd": "{projectRoot}"
++     }
++   },
++   "migrate-drizzle": {
++     "command": "drizzle-kit migrate",
++     "options": {
++       "cwd": "{projectRoot}"
++     }
++   }
++ }
+}
+```
+
+- We are going to test the `generate-drizzle` and `migrate-drizzle` commands.
+
+```bash
+b-engine/apps/products$ nx generate-drizzle products
+
+> nx run products:generate-drizzle
+
+> drizzle-kit generate
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+1 tables
+products 7 columns 0 indexes 0 fks
+
+No schema changes, nothing to migrate 😴
+
+—————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target generate-drizzle for project products (672ms)
+
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-jo
+```
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products$ nx migrate-drizzle products
+
+> nx run products:migrate-drizzle
+
+> drizzle-kit migrate
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/juanpabloperez/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/products/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] migrations applied successfully!
+—————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target migrate-drizzle for project products (483ms)
+```

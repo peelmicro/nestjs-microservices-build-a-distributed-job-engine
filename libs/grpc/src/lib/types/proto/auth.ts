@@ -2,13 +2,16 @@
 // versions:
 //   protoc-gen-ts_proto  v2.6.1
 //   protoc               v3.20.3
-// source: proto/auth.proto
+// source: auth.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire';
+import {
+  type handleUnaryCall,
+  type UntypedServiceImplementation,
+} from '@grpc/grpc-js';
 import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
-
-export const protobufPackage = 'auth';
 
 export interface AuthenticateRequest {
   token: string;
@@ -19,7 +22,101 @@ export interface User {
   email: string;
 }
 
-export const AUTH_PACKAGE_NAME = 'auth';
+function createBaseAuthenticateRequest(): AuthenticateRequest {
+  return { token: '' };
+}
+
+export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
+  encode(
+    message: AuthenticateRequest,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.token !== '') {
+      writer.uint32(10).string(message.token);
+    }
+    return writer;
+  },
+
+  decode(
+    input: BinaryReader | Uint8Array,
+    length?: number,
+  ): AuthenticateRequest {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAuthenticateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.token = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+};
+
+function createBaseUser(): User {
+  return { id: 0, email: '' };
+}
+
+export const User: MessageFns<User> = {
+  encode(
+    message: User,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.email !== '') {
+      writer.uint32(18).string(message.email);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): User {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUser();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.id = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.email = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+};
 
 export interface AuthServiceClient {
   authenticate(request: AuthenticateRequest): Observable<User>;
@@ -61,3 +158,27 @@ export function AuthServiceControllerMethods() {
 }
 
 export const AUTH_SERVICE_NAME = 'AuthService';
+
+export type AuthServiceService = typeof AuthServiceService;
+export const AuthServiceService = {
+  authenticate: {
+    path: '/auth.AuthService/Authenticate',
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: AuthenticateRequest) =>
+      Buffer.from(AuthenticateRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => AuthenticateRequest.decode(value),
+    responseSerialize: (value: User) =>
+      Buffer.from(User.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => User.decode(value),
+  },
+} as const;
+
+export interface AuthServiceServer extends UntypedServiceImplementation {
+  authenticate: handleUnaryCall<AuthenticateRequest, User>;
+}
+
+interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
+}

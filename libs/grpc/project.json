@@ -18,11 +18,10 @@
       }
     },
     "generate-ts-proto": {
-      "command": "npx protoc --plugin=protoc-gen-ts_proto=../../node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/lib/types/proto ./src/lib/proto/*.proto --ts_proto_opt=nestJs=true --ts_proto_opt=exportCommonSymbols=false",
+      "command": "npx protoc --plugin=protoc-gen-ts_proto=../../node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/lib/types/proto --proto_path=./src/lib/proto src/lib/proto/*.proto --ts_proto_opt=nestJs=true --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=outputServices=grpc-js",
       "options": {
         "cwd": "{projectRoot}"
       },
-      "inputs": ["{projectRoot}/src/lib/proto/*.proto"],
       "cache": true
     }
   }
