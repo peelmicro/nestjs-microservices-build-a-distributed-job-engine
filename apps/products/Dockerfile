@@ -41,8 +41,8 @@ COPY --from=builder /workspace/apps/products/drizzle ./apps/products/drizzle
 ENV NODE_ENV=production
 
 # Install production dependencies
-# RUN npm install --production --legacy-peer-deps
-RUN npm ci --legacy-peer-deps
+RUN npm install --production --legacy-peer-deps
+# RUN npm ci --legacy-peer-deps
 
 # Copy build output and other files
 COPY --from=builder /workspace/dist ./dist
