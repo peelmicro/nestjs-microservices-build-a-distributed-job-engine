@@ -31,18 +31,18 @@ WORKDIR /app
 
 # Copy necessary files
 COPY --from=builder /workspace/package.json ./
+COPY --from=builder /workspace/package-lock.json ./
 COPY --from=builder /workspace/apps/products/package.json ./apps/products/package.json
 COPY --from=builder /workspace/libs/grpc/package.json ./libs/grpc/package.json
 COPY --from=builder /workspace/apps/products/drizzle.config.ts ./apps/products/drizzle.config.ts
 COPY --from=builder /workspace/apps/products/drizzle ./apps/products/drizzle
-COPY --from=builder /workspace/package-lock.json ./
 
 # Set production environment
 ENV NODE_ENV=production
 
 # Install production dependencies
-RUN npm install --production --legacy-peer-deps
-# RUN npm ci --legacy-peer-deps
+# RUN npm install --production --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # Copy build output and other files
 COPY --from=builder /workspace/dist ./dist
