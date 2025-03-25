@@ -1,6 +1,5 @@
 @urlLogin = http://localhost:3000/graphql
 
-@urlRest = http://localhost:3001/api
 @url = http://localhost:3001/graphql
 
 ### Login
@@ -71,6 +70,7 @@ mutation {
 
 
 ### Execute Fibonacci job with invalid data
+
 POST {{url}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
@@ -81,6 +81,9 @@ mutation {
     name
   }
 }
+
+@urlRest = http://localhost:3001/api
+# @urlRest = http://127.0.0.1:44407/api
 
 ### Upload file
 POST {{urlRest}}/uploads/upload
