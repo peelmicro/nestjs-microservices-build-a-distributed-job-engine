@@ -41,7 +41,8 @@ COPY --from=builder /workspace/package-lock.json ./
 ENV NODE_ENV=production
 
 # Install production dependencies
-RUN npm ci --legacy-peer-deps
+RUN npm install --production --legacy-peer-deps
+# RUN npm ci --legacy-peer-deps
 
 # Copy build output and other files
 COPY --from=builder /workspace/dist ./dist

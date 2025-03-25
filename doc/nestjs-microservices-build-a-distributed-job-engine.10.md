@@ -259,7 +259,16 @@ namespace "postgresql" created
 - We are going to update the dependencies of the `jobber` charts.
 
 ```bash
-helm dependency update
+helm dependency update charts/jobber
+Getting updates for unmanaged Helm repositories...
+...Successfully got an update from the "https://pulsar.apache.org/charts" chart repository
+...Successfully got an update from the "https://charts.bitnami.com/bitnami" chart repository
+Saving 2 charts
+Downloading pulsar from repo https://pulsar.apache.org/charts
+Downloading postgresql from repo https://charts.bitnami.com/bitnami
+Pulled: registry-1.docker.io/bitnamicharts/postgresql:16.5.4
+Digest: sha256:a724fb4529ffca602734350335fa45ae3ecf8bfb7f8a77bd23e82d9fee132940
+Deleting outdated charts
 ```
 
 - We need to upgrade the `jobber` charts.
@@ -286,5 +295,5 @@ jobber-postgresql-0   1/1     Running   0          91s
 - We need to ensure that the `jobber` pods are running.
 
 ```bash
-helm upgrade --install jobber ./charts/jobber --namespace jobber --values ./charts/jobber/values.yaml
+kubectl get po -n jobber
 ```
