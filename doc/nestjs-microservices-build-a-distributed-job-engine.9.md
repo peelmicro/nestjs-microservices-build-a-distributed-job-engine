@@ -1525,7 +1525,7 @@ juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-buil
 .
 ```
 
-#### 12.15.5 We are going to modify the `Products wepack.config.js` file to use the `commonConfig` file
+#### 12.15.5 We are going to modify the `Products webpack.config.js` file to use the `commonConfig` file
 
 > apps/products/webpack.config.js
 

@@ -2,10 +2,10 @@
   "name": "@jobber/products",
   "version": "0.0.0",
   "devDependencies": {
-    "@types/pg": "^8.11.11",
-    "drizzle-kit": "^0.30.5"
+    "@types/pg": "^8.11.11"
   },
   "dependencies": {
+    "drizzle-kit": "^0.30.5",
     "drizzle-orm": "^0.41.0",
     "pg": "^8.14.1"
   }
