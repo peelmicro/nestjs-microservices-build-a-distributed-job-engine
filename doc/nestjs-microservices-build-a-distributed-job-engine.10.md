@@ -745,3 +745,1040 @@ kubectl get pvc -n jobber
 NAME          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
 uploads-pvc   Bound    pvc-4ca1e54a-c71c-402e-b099-5860bc86d927   5Gi        RWX            standard       <unset>                 14m
 ```
+
+## 13 Tracking Job Status
+
+- We are going to add the ability to track the status of a job that has been executed.
+
+### 13.1 Adding Jobs to the Database by using Prisma
+
+- We need to modify the `.env` file to create the correct database url.
+
+> apps/jobs/.env
+
+```text
+.
+DATABASE_URL=postgresql://postgres:example@localhost:5432/jobs?schema=public
+```
+
+- We are going to create a new Prisma model to track the status of a job.
+
+> apps/jobs/prisma/schema.prisma
+
+```prisma
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "debian-openssl-1.1.x"]
+    output = "../../../node_modules/@prisma-clients/jobs"
+}
+
+datasource db {
+    provider = "postgresql"
+    url = env("DATABASE_URL")
+}
+
+model Job {
+   id Int @default(autoincrement()) @id
+   name String
+   size Int
+   completed Int
+   status String
+   started DateTime @default(now())
+   ended DateTime?
+}
+```
+
+- We need to update the `project.json` file to add the `generate-prisma` and `migrate-prisma` scripts.
+
+> apps/jobs/project.json
+
+```diff
+{
+  "name": "jobs",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/jobs/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
++   "build": {
++     "dependsOn": ["generate-prisma", "^build"]
++   },
++   "test": {
++     "dependsOn": ["generate-prisma"]
++   },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "jobs:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "jobs:build:development"
+        },
+        "production": {
+          "buildTarget": "jobs:build:production"
+        }
+      }
+    },
++   "generate-prisma": {
++     "command": "prisma generate",
++     "options": {
++       "cwd": "{projectRoot}",
++       "input": ["prisma/schema.prisma"]
++     },
++     "cache": true
++   },
++   "migrate-prisma": {
++     "command": "prisma migrate dev",
++     "options": {
++       "cwd": "{projectRoot}"
++     }
++   }
++ }
+}
+```
+
+- We need to run the `generate-prisma` script to create the pg script to create the database and table.
+
+```bash
+ nx generate-prisma jobs
+
+> nx run jobs:generate-prisma
+
+> prisma generate
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/jobs in 89ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Curious about the SQL queries Prisma ORM generates? Optimize helps you enhance your visibility: https://pris.ly/tip-2-optimize
+
+
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target generate-prisma for project jobs (1s)
+```
+
+- We need to run the `migrate-prisma` script to create the database.
+
+```bash
+nx migrate-prisma jobs
+
+> nx run jobs:migrate-prisma
+
+> prisma migrate dev
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "jobs", schema "public" at "localhost:5432"
+
+? Enter a name for the new migration: › create-jobs-table
+```
+
+> Note: It is not working because it ends up hanging.
+
+- We need to create the migration manually.
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine/apps/jobs$ npx prisma migrate dev --name initial
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "jobs", schema "public" at "localhost:5432"
+
+Applying migration `20250326172346_initial`
+
+The following migration(s) have been created and applied from new schema changes:
+
+migrations/
+  └─ 20250326172346_initial/
+    └─ migration.sql
+
+Your database is now in sync with your schema.
+
+✔ Generated Prisma Client (v6.4.1) to ./../../node_modules/@prisma-clients/jobs in 96ms
+```
+
+### 13.2 Saving the Job to Jobs table
+
+- We are going to create a new prisma service to save the job to the database.
+
+> apps/jobs/src/app/prisma/prisma.service.ts
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { PrismaClient } from '@prisma-clients/jobs';
+
+@Injectable()
+export class PrismaService extends PrismaClient implements OnModuleInit {
+  async onModuleInit() {
+    await this.$connect();
+  }
+}
+```
+
+- We need to create the `app.module.ts` file to use the `PrismaService` service.
+
+> apps/jobs/src/app/app.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule {}
+```
+
+- We need to update the `app.module.ts` file to use the `PrismaModule` module.
+
+> apps/jobs/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { JobsModule } from './jobs.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { LoggerModule } from '@jobber/nestjs';
+import { GqlLoggingPlugin } from '@jobber/graphql';
+import { UploadsModule } from './uploads/uploads.module';
++import { PrismaModule } from './prisma/prisma.module';
+@Module({
+  imports: [
+    LoggerModule,
+    UploadsModule,
++   PrismaModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    JobsModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+      plugins: [new GqlLoggingPlugin()],
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
+    }),
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+- We are going to create an enum to track the status of a job.
+
+> apps/jobs/src/app/models/job-status.enum.ts
+
+```typescript
+export enum JobStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}
+```
+
+- We need to update the `AbstractJob` class to save the job to the database.
+
+> apps/jobs/src/app/jobs/abstract.job.ts
+
+```typescript
+import { Producer } from 'pulsar-client';
+import { PulsarClient, serialize } from '@jobber/pulsar';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { JobStatus } from '../models/job-status.enum';
+export abstract class AbstractJob<T extends object> {
+  private producer: Producer;
+  protected abstract messageClass: new () => T;
+
+  constructor(
+    private readonly pulsarClient: PulsarClient,
+    private readonly prismaService: PrismaService,
+  ) {}
+
+  async execute(data: T, name: string) {
+    if (!this.producer) {
+      this.producer = await this.pulsarClient.createProducer(name);
+    }
+    const job = await this.prismaService.job.create({
+      data: {
+        name,
+        size: Array.isArray(data) ? data.length : 1,
+        completed: 0,
+        status: JobStatus.IN_PROGRESS,
+      },
+    });
+    if (Array.isArray(data)) {
+      for (const message of data) {
+        this.send({ ...message, jobId: job.id });
+      }
+      return job;
+    }
+    this.send({ ...data, jobId: job.id });
+    return job;
+  }
+
+  private send(data: T) {
+    this.validateData(data).then(() => this.producer.send({ data: serialize(data) }));
+  }
+
+  private async validateData(data: T) {
+    const errors = await validate(plainToInstance(this.messageClass, data));
+    if (errors.length) {
+      throw new BadRequestException(`Job data is invalid: ${JSON.stringify(errors, null, 2)}`);
+    }
+  }
+}
+```
+
+- We need to update the Jobs classes to update the job status when the job is completed.
+
+> apps/jobs/src/app/jobs/fibonacci/fibonacci.job.ts
+
+```typescript
+import { PulsarClient, FibonacciMessage } from '@jobber/pulsar';
+import { Job } from '../../decorators/job.decorator';
+import { AbstractJob } from '../abstract.job';
+import { Jobs } from '@jobber/nestjs';
+import { PrismaService } from '../../prisma/prisma.service';
+@Job({
+  name: Jobs.FIBONACCI,
+  description: 'Generate a Fibonacci sequence and store it in the DB.',
+})
+export class FibonacciJob extends AbstractJob<FibonacciMessage> {
+  protected messageClass = FibonacciMessage;
+  constructor(pulsarClient: PulsarClient, prismaService: PrismaService) {
+    super(pulsarClient, prismaService);
+  }
+}
+```
+
+> apps/jobs/src/app/jobs/products/load-products.job.ts
+
+```typescript
+import { Jobs } from '@jobber/nestjs';
+import { Job } from '../../decorators/job.decorator';
+import { AbstractJob } from '../abstract.job';
+import { LoadProductsMessage, PulsarClient } from '@jobber/pulsar';
+import { PrismaService } from '../../prisma/prisma.service';
+
+@Job({
+  name: Jobs.LOAD_PRODUCTS,
+  description: 'Loads uploaded product data into the DB after enrichment.',
+})
+export class LoadProductsJob extends AbstractJob<LoadProductsMessage> {
+  protected messageClass = LoadProductsMessage;
+
+  constructor(pulsarClient: PulsarClient, prismaService: PrismaService) {
+    super(pulsarClient, prismaService);
+  }
+}
+```
+
+- We need to update the `jobs.module.ts` file to use the `PrismaModule` module.
+
+> apps/jobs/src/app/jobs.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FibonacciJob } from './jobs/fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { Packages } from '@jobber/grpc';
+import { join } from 'path';
+import { PulsarModule } from '@jobber/pulsar';
+import { LoadProductsJob } from './jobs/products/load-products.job';
+import { PrismaModule } from './prisma/prisma.module';
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
+    PulsarModule,
+    PrismaModule,
+    ClientsModule.registerAsync([
+      {
+        name: Packages.AUTH,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('AUTH_GRPC_SERVICE_URL'),
+            package: Packages.AUTH,
+            protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  controllers: [],
+  providers: [FibonacciJob, JobsService, JobsResolver, LoadProductsJob],
+})
+export class JobsModule {}
+```
+
+### 13.3 Acknowledging a Job
+
+#### 13.3.1 Creating the proto file for the `jobs` service
+
+- We need to create a new proto file for the `jobs` service.
+
+> apps/grpc/src/lib/proto/jobs.proto
+
+```proto
+syntax = "proto3";
+
+package jobs;
+
+service JobsService {
+    rpc Acknowledge(AcknowledgeRequest) returns (AcknowledgeResponse) {}
+}
+
+message AcknowledgeRequest {
+    int32 jobId = 1;
+}
+
+message AcknowledgeResponse {}
+```
+
+- As the `monorepo` is running, the `jobs.type.ts` document has been generated automatically.
+
+> apps/grpc/src/lib/types/proto/jobs.ts
+
+```typescript
+// Code generated by protoc-gen-ts_proto. DO NOT EDIT.
+// versions:
+//   protoc-gen-ts_proto  v2.6.1
+//   protoc               v3.20.3
+// source: jobs.proto
+
+/* eslint-disable */
+import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire';
+import { type handleUnaryCall, type UntypedServiceImplementation } from '@grpc/grpc-js';
+import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
+import { Observable } from 'rxjs';
+
+export interface AcknowledgeRequest {
+  jobId: number;
+}
+
+export interface AcknowledgeResponse {}
+
+function createBaseAcknowledgeRequest(): AcknowledgeRequest {
+  return { jobId: 0 };
+}
+
+export const AcknowledgeRequest: MessageFns<AcknowledgeRequest> = {
+  encode(message: AcknowledgeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== 0) {
+      writer.uint32(8).int32(message.jobId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AcknowledgeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAcknowledgeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.jobId = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+};
+
+function createBaseAcknowledgeResponse(): AcknowledgeResponse {
+  return {};
+}
+
+export const AcknowledgeResponse: MessageFns<AcknowledgeResponse> = {
+  encode(_: AcknowledgeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AcknowledgeResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAcknowledgeResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+};
+
+export interface JobsServiceClient {
+  acknowledge(request: AcknowledgeRequest): Observable<AcknowledgeResponse>;
+}
+
+export interface JobsServiceController {
+  acknowledge(request: AcknowledgeRequest): Promise<AcknowledgeResponse> | Observable<AcknowledgeResponse> | AcknowledgeResponse;
+}
+
+export function JobsServiceControllerMethods() {
+  return function (constructor: Function) {
+    const grpcMethods: string[] = ['acknowledge'];
+    for (const method of grpcMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod('JobsService', method)(constructor.prototype[method], method, descriptor);
+    }
+    const grpcStreamMethods: string[] = [];
+    for (const method of grpcStreamMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod('JobsService', method)(constructor.prototype[method], method, descriptor);
+    }
+  };
+}
+
+export const JOBS_SERVICE_NAME = 'JobsService';
+
+export type JobsServiceService = typeof JobsServiceService;
+export const JobsServiceService = {
+  acknowledge: {
+    path: '/jobs.JobsService/Acknowledge',
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: AcknowledgeRequest) => Buffer.from(AcknowledgeRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => AcknowledgeRequest.decode(value),
+    responseSerialize: (value: AcknowledgeResponse) => Buffer.from(AcknowledgeResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => AcknowledgeResponse.decode(value),
+  },
+} as const;
+
+export interface JobsServiceServer extends UntypedServiceImplementation {
+  acknowledge: handleUnaryCall<AcknowledgeRequest, AcknowledgeResponse>;
+}
+
+interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
+}
+```
+
+- We just need to update the `index.ts` file to include the `JobsService`.
+
+> libs/grpc/src/lib/types/proto/index.ts
+
+```ts
+export * from './auth';
+export * from './products';
+export * from './jobs';
+```
+
+#### 13.3.2 Updating the `jobs.service.ts` file
+
+- We need to update the `jobs.service.ts` file to use the `PrismaService` service to include the `acknowledge` method and update the job status when the job is completed.
+
+> apps/jobs/src/app/jobs.service.ts
+
+```typescript
+import { DiscoveredClassWithMeta, DiscoveryService } from '@golevelup/nestjs-discovery';
+import { BadRequestException, Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { JOB_METADATA_KEY } from './decorators/job.decorator';
+import { JobMetadata } from './interfaces/job-metadata.interface';
+import { AbstractJob } from './jobs/abstract.job';
+import { readFileSync } from 'fs';
+import { UPLOAD_FILE_PATH } from './uploads/upload';
+import { PrismaService } from './prisma/prisma.service';
+import { JobStatus } from './models/job-status.enum';
+
+@Injectable()
+export class JobsService implements OnModuleInit {
+  private jobs: DiscoveredClassWithMeta<JobMetadata>[] = [];
+
+  constructor(
+    private readonly discoveryService: DiscoveryService,
+    private readonly prismaService: PrismaService,
+  ) {}
+
+  async onModuleInit() {
+    this.jobs = await this.discoveryService.providersWithMetaAtKey<JobMetadata>(JOB_METADATA_KEY);
+  }
+
+  getJobsMetadata() {
+    return this.jobs.map((job) => job.meta);
+  }
+
+  async getJob(id: number) {
+    return this.prismaService.job.findUnique({
+      where: { id },
+    });
+  }
+
+  async getJobs() {
+    return this.prismaService.job.findMany();
+  }
+
+  async executeJob(name: string, data?: any) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+    if (!(job.discoveredClass.instance instanceof AbstractJob)) {
+      throw new InternalServerErrorException('Job is not an instance of AbstractJob.');
+    }
+    return job.discoveredClass.instance.execute(data?.fileName ? this.getFile(data.fileName) : data || {}, job.meta.name);
+  }
+
+  getJobByName(name: string) {
+    const job = this.jobs.find((job) => job.meta.name === name);
+    if (!job) {
+      throw new BadRequestException(`Job with name ${name} not found`);
+    }
+
+    // Return a Job object with the metadata
+    return {
+      name: job.meta.name,
+      description: job.meta.description,
+    };
+  }
+
+  async acknowledge(jobId: number) {
+    const job = await this.prismaService.job.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job) {
+      throw new BadRequestException(`Job with ID ${jobId} does not exist.`);
+    }
+
+    if (job.ended) {
+      return;
+    }
+
+    const updatedJob = await this.prismaService.job.update({
+      where: { id: jobId },
+      data: { completed: { increment: 1 } },
+    });
+
+    if (updatedJob.completed === job.size) {
+      await this.prismaService.job.update({
+        where: { id: jobId },
+        data: { status: JobStatus.COMPLETED, ended: new Date() },
+      });
+    }
+
+    return updatedJob;
+  }
+
+  private getFile(fileName?: string) {
+    if (!fileName) {
+      return;
+    }
+    try {
+      return JSON.parse(readFileSync(`${UPLOAD_FILE_PATH}/${fileName}`, 'utf-8'));
+    } catch (err) {
+      throw new InternalServerErrorException(`Failed to read file: ${fileName}`);
+    }
+  }
+}
+```
+
+#### 13.3.3 Creating the `jobs.controller.ts` file
+
+- We need to create the new `jobs.controller.ts` file.
+
+> apps/jobs/src/app/jobs.controller.ts
+
+```typescript
+import { AcknowledgeRequest, JobsServiceController, JobsServiceControllerMethods } from '@jobber/grpc';
+import { Controller } from '@nestjs/common';
+import { JobsService } from './jobs.service';
+
+@Controller()
+@JobsServiceControllerMethods()
+export class JobsController implements JobsServiceController {
+  constructor(private readonly jobsService: JobsService) {}
+
+  async acknowledge(request: AcknowledgeRequest) {
+    await this.jobsService.acknowledge(request.jobId);
+  }
+}
+```
+
+#### 13.3.4 Updating the `jobs.module.ts` file
+
+- We need to update the `jobs.module.ts` file to include the `JobsController`.
+
+> apps/jobs/src/app/jobs.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FibonacciJob } from './jobs/fibonacci/fibonacci.job';
+import { DiscoveryModule } from '@golevelup/nestjs-discovery';
+import { JobsService } from './jobs.service';
+import { JobsResolver } from './jobs.resolver';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { Packages } from '@jobber/grpc';
+import { join } from 'path';
+import { PulsarModule } from '@jobber/pulsar';
+import { LoadProductsJob } from './jobs/products/load-products.job';
+import { PrismaModule } from './prisma/prisma.module';
+import { JobsController } from './jobs.controller';
+@Module({
+  imports: [
+    ConfigModule,
+    DiscoveryModule,
+    PulsarModule,
+    PrismaModule,
+    ClientsModule.registerAsync([
+      {
+        name: Packages.AUTH,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('AUTH_GRPC_SERVICE_URL'),
+            package: Packages.AUTH,
+            protoPath: join(__dirname, '../../libs/grpc/proto/auth.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  controllers: [JobsController],
+  providers: [FibonacciJob, JobsService, JobsResolver, LoadProductsJob],
+})
+export class JobsModule {}
+```
+
+#### 13.3.5 Updating the `main.ts` file
+
+- We need to update the `.env` file to include the `JOBS_GRPC_SERVICE_URL` environment variable.
+
+> apps/jobs/.env
+
+```text
+.
+JOBS_GRPC_SERVICE_URL=localhost:5002
+```
+
+- We need to update the `main.ts` file to include the gRPC microservice.
+
+> apps/jobs/src/main.ts
+
+```typescript
+import 'module-alias/register';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app/app.module';
+import { init } from '@jobber/nestjs';
+import { Transport } from '@nestjs/microservices';
+import { GrpcOptions } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
+import { Packages } from '@jobber/grpc';
+import { join } from 'path';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  await init(app);
+  app.connectMicroservice<GrpcOptions>({
+    transport: Transport.GRPC,
+    options: {
+      url: app.get(ConfigService).getOrThrow('JOBS_GRPC_SERVICE_URL'),
+      package: Packages.JOBS,
+      protoPath: join(__dirname, '../../libs/grpc/proto/jobs.proto'),
+    },
+  });
+  await app.startAllMicroservices();
+}
+
+bootstrap();
+```
+
+### 13.4 Updating the Executor Service to implement the call to the `acknowledge` method
+
+#### 13.4.1 Creating the `job-clients.module.ts` file
+
+- We need to modify the `.env` file to include the `JOBS_GRPC_SERVICE_URL` environment variable.
+
+> apps/executor/.env
+
+```text
+.
+JOBS_GRPC_SERVICE_URL=localhost:5002
+```
+
+- We need to create the `job-clients.module.ts` file that is going to provide the clients access for the `jobs` gRPC service.
+
+> apps/executor/src/app/jobs/job-clients.module.ts
+
+```typescript
+import { Packages } from '@jobber/grpc';
+import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { join } from 'path';
+
+@Module({
+  imports: [
+    ClientsModule.registerAsync([
+      {
+        name: Packages.JOBS,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('JOBS_GRPC_SERVICE_URL'),
+            package: Packages.JOBS,
+            protoPath: join(__dirname, '../../libs/grpc/proto/jobs.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  exports: [ClientsModule],
+})
+export class JobClientsModule {}
+```
+
+- We need to update the `jobs.module.ts` file to include the `JobClientsModule`.
+
+> apps/executor/src/app/jobs/jobs.module.ts
+
+```typescript
+import { PulsarModule } from '@jobber/pulsar';
+import { Module } from '@nestjs/common';
+import { FibonacciConsumer } from './fibonacci/fibonacci.consumer';
+import { LoadProductModule } from './products/load-products.module';
+import { JobClientsModule } from './job-clients.module';
+
+@Module({
+  imports: [PulsarModule, LoadProductModule, JobClientsModule],
+  providers: [FibonacciConsumer],
+})
+export class JobsModule {}
+```
+
+- We need to update the `LoadProductModule` to include the `JobClientsModule`.
+
+> apps/executor/src/app/products/load-products.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { LoadProductsConsumer } from './load-products.consumer';
+import { PulsarModule } from '@jobber/pulsar';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { Packages } from '@jobber/grpc';
+import { ConfigService } from '@nestjs/config';
+import { join } from 'path';
+import { JobClientsModule } from '../job-clients.module';
+@Module({
+  imports: [
+    PulsarModule,
+    JobClientsModule,
+    ClientsModule.registerAsync([
+      {
+        name: Packages.PRODUCTS,
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            url: configService.getOrThrow('PRODUCTS_GRPC_SERVICE_URL'),
+            package: Packages.PRODUCTS,
+            protoPath: join(__dirname, '../../libs/grpc/proto/products.proto'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
+  providers: [LoadProductsConsumer],
+})
+export class LoadProductModule {}
+```
+
+#### 13.4.2 Creating the `jobs.consumer.ts` file
+
+- We need to create the `jobs.consumer.ts` file that is going to be used as an abstract class to consume the `jobs` service.
+
+> apps/executor/src/app/jobs/jobs.consumer.ts
+
+```typescript
+import { AcknowledgeRequest, JOBS_SERVICE_NAME, JobsServiceClient } from '@jobber/grpc';
+import { PulsarClient, PulsarConsumer } from '@jobber/pulsar';
+import { ClientGrpc } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+
+export abstract class JobConsumer<T extends AcknowledgeRequest> extends PulsarConsumer<T> {
+  private jobsService: JobsServiceClient;
+
+  constructor(
+    topic: string,
+    pulsarClient: PulsarClient,
+    private readonly grpcClient: ClientGrpc,
+  ) {
+    super(pulsarClient, topic);
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.jobsService = this.grpcClient.getService<JobsServiceClient>(JOBS_SERVICE_NAME);
+    await super.onModuleInit();
+  }
+
+  protected async onMessage(data: T): Promise<void> {
+    await this.execute(data);
+    await firstValueFrom(this.jobsService.acknowledge(data));
+  }
+
+  protected abstract execute(data: T): Promise<void>;
+}
+```
+
+#### 13.4.4 Updating the `fibonacci.consumer.ts` file
+
+- We need to update the `fibonacci.consumer.ts` file to extend the `JobConsumer` class.
+
+> apps/executor/src/app/jobs/fibonacci/fibonacci.consumer.ts
+
+```typescript
+iimport { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Jobs } from '@jobber/nestjs';
+import { FibonacciMessage, PulsarClient, PulsarConsumer } from '@jobber/pulsar';
+import { iterate } from 'fibonacci';
+import { Packages } from '@jobber/grpc';
+import { ClientGrpc } from '@nestjs/microservices';
+import { JobConsumer } from '../job.consumer';
+@Injectable()
+export class FibonacciConsumer
+  extends JobConsumer<FibonacciMessage>
+  implements OnModuleInit
+{
+  constructor(
+    pulsarClient: PulsarClient,
+    @Inject(Packages.JOBS) clientJobs: ClientGrpc
+  ) {
+    super(Jobs.FIBONACCI, pulsarClient,  clientJobs);
+  }
+
+  protected async execute(data: FibonacciMessage): Promise<void> {
+    const result = iterate(data.iterations);
+    this.logger.log(result);
+  }
+}
+```
+
+#### 13.4.5 Updating the `jobs.consumer.ts` file
+
+- We need to update the `jobs.consumer.ts` file to extend the `JobConsumer` class.
+
+> apps/executor/src/app/jobs/jobs.consumer.ts
+
+```typescript
+import { Packages, PRODUCTS_SERVICE_NAME, ProductsServiceClient } from '@jobber/grpc';
+import { Jobs } from '@jobber/nestjs';
+import { LoadProductsMessage, PulsarClient } from '@jobber/pulsar';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+import { JobConsumer } from '../job.consumer';
+
+@Injectable()
+export class LoadProductsConsumer extends JobConsumer<LoadProductsMessage> implements OnModuleInit {
+  private productsService: ProductsServiceClient;
+
+  constructor(
+    pulsarClient: PulsarClient,
+    @Inject(Packages.JOBS) clientJobs: ClientGrpc,
+    @Inject(Packages.PRODUCTS) private clientProducts: ClientGrpc,
+  ) {
+    super(Jobs.LOAD_PRODUCTS, pulsarClient, clientJobs);
+  }
+
+  async onModuleInit() {
+    this.productsService = this.clientProducts.getService<ProductsServiceClient>(PRODUCTS_SERVICE_NAME);
+    await super.onModuleInit();
+  }
+
+  protected async execute(data: LoadProductsMessage) {
+    await firstValueFrom(this.productsService.createProduct(data));
+  }
+}
+```
+
+### 13.5 Ensuring the system is working as expected
+
+- We need to ensure the system is working as expected by starting the `jobs` and `executor` services and sending a message to the `LoadProducts` job.
+
+> apps/jobs/src/app/job.http
+
+```http
+### Execute Load Products job with one filename
+POST {{url}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+    name
+  }
+}
+```
+
+- We receive the following response:
+
+```json
+HTTP/1.1 200 OK
+X-Powered-By: Express
+cache-control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 48
+ETag: W/"30-/M4kLcVyISYwL5nFCGTaXBJBQDM"
+Date: Thu, 27 Mar 2025 11:00:45 GMT
+Connection: close
+
+{
+  "data": {
+    "executeJob": {
+      "name": "LoadProducts"
+    }
+  }
+}
+```
+
+- We can see the job has been executed by checking the `jobs` service logs:
+
+> apps/jobs/src/app/jobs.service.ts
+
+```text
+
+
+
+
+```

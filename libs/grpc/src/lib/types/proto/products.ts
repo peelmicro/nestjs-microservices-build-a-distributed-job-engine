@@ -5,13 +5,10 @@
 // source: products.proto
 
 /* eslint-disable */
-import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire';
-import {
-  type handleUnaryCall,
-  type UntypedServiceImplementation,
-} from '@grpc/grpc-js';
-import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
-import { Observable } from 'rxjs';
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { type handleUnaryCall, type UntypedServiceImplementation } from "@grpc/grpc-js";
+import { GrpcMethod, GrpcStreamMethod } from "@nestjs/microservices";
+import { Observable } from "rxjs";
 
 export interface CreateProductRequest {
   name: string;
@@ -22,28 +19,19 @@ export interface CreateProductRequest {
   description: string;
 }
 
-export interface CreateProductResponse {}
+export interface CreateProductResponse {
+}
 
 function createBaseCreateProductRequest(): CreateProductRequest {
-  return {
-    name: '',
-    category: '',
-    price: 0,
-    stock: 0,
-    rating: 0,
-    description: '',
-  };
+  return { name: "", category: "", price: 0, stock: 0, rating: 0, description: "" };
 }
 
 export const CreateProductRequest: MessageFns<CreateProductRequest> = {
-  encode(
-    message: CreateProductRequest,
-    writer: BinaryWriter = new BinaryWriter(),
-  ): BinaryWriter {
-    if (message.name !== '') {
+  encode(message: CreateProductRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
       writer.uint32(10).string(message.name);
     }
-    if (message.category !== '') {
+    if (message.category !== "") {
       writer.uint32(18).string(message.category);
     }
     if (message.price !== 0) {
@@ -55,18 +43,14 @@ export const CreateProductRequest: MessageFns<CreateProductRequest> = {
     if (message.rating !== 0) {
       writer.uint32(45).float(message.rating);
     }
-    if (message.description !== '') {
+    if (message.description !== "") {
       writer.uint32(50).string(message.description);
     }
     return writer;
   },
 
-  decode(
-    input: BinaryReader | Uint8Array,
-    length?: number,
-  ): CreateProductRequest {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateProductRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseCreateProductRequest();
     while (reader.pos < end) {
@@ -135,19 +119,12 @@ function createBaseCreateProductResponse(): CreateProductResponse {
 }
 
 export const CreateProductResponse: MessageFns<CreateProductResponse> = {
-  encode(
-    _: CreateProductResponse,
-    writer: BinaryWriter = new BinaryWriter(),
-  ): BinaryWriter {
+  encode(_: CreateProductResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     return writer;
   },
 
-  decode(
-    input: BinaryReader | Uint8Array,
-    length?: number,
-  ): CreateProductResponse {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateProductResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseCreateProductResponse();
     while (reader.pos < end) {
@@ -164,62 +141,41 @@ export const CreateProductResponse: MessageFns<CreateProductResponse> = {
 };
 
 export interface ProductsServiceClient {
-  createProduct(
-    request: CreateProductRequest,
-  ): Observable<CreateProductResponse>;
+  createProduct(request: CreateProductRequest): Observable<CreateProductResponse>;
 }
 
 export interface ProductsServiceController {
   createProduct(
     request: CreateProductRequest,
-  ):
-    | Promise<CreateProductResponse>
-    | Observable<CreateProductResponse>
-    | CreateProductResponse;
+  ): Promise<CreateProductResponse> | Observable<CreateProductResponse> | CreateProductResponse;
 }
 
 export function ProductsServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ['createProduct'];
+    const grpcMethods: string[] = ["createProduct"];
     for (const method of grpcMethods) {
-      const descriptor: any = Reflect.getOwnPropertyDescriptor(
-        constructor.prototype,
-        method,
-      );
-      GrpcMethod('ProductsService', method)(
-        constructor.prototype[method],
-        method,
-        descriptor,
-      );
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("ProductsService", method)(constructor.prototype[method], method, descriptor);
     }
     const grpcStreamMethods: string[] = [];
     for (const method of grpcStreamMethods) {
-      const descriptor: any = Reflect.getOwnPropertyDescriptor(
-        constructor.prototype,
-        method,
-      );
-      GrpcStreamMethod('ProductsService', method)(
-        constructor.prototype[method],
-        method,
-        descriptor,
-      );
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("ProductsService", method)(constructor.prototype[method], method, descriptor);
     }
   };
 }
 
-export const PRODUCTS_SERVICE_NAME = 'ProductsService';
+export const PRODUCTS_SERVICE_NAME = "ProductsService";
 
 export type ProductsServiceService = typeof ProductsServiceService;
 export const ProductsServiceService = {
   createProduct: {
-    path: '/products.ProductsService/CreateProduct',
+    path: "/products.ProductsService/CreateProduct",
     requestStream: false,
     responseStream: false,
-    requestSerialize: (value: CreateProductRequest) =>
-      Buffer.from(CreateProductRequest.encode(value).finish()),
+    requestSerialize: (value: CreateProductRequest) => Buffer.from(CreateProductRequest.encode(value).finish()),
     requestDeserialize: (value: Buffer) => CreateProductRequest.decode(value),
-    responseSerialize: (value: CreateProductResponse) =>
-      Buffer.from(CreateProductResponse.encode(value).finish()),
+    responseSerialize: (value: CreateProductResponse) => Buffer.from(CreateProductResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => CreateProductResponse.decode(value),
   },
 } as const;

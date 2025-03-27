@@ -9,12 +9,14 @@ import { Packages } from '@jobber/grpc';
 import { join } from 'path';
 import { PulsarModule } from '@jobber/pulsar';
 import { LoadProductsJob } from './jobs/products/load-products.job';
-
+import { PrismaModule } from './prisma/prisma.module';
+import { JobsController } from './jobs.controller';
 @Module({
   imports: [
     ConfigModule,
     DiscoveryModule,
     PulsarModule,
+    PrismaModule,
     ClientsModule.registerAsync([
       {
         name: Packages.AUTH,
@@ -30,7 +32,7 @@ import { LoadProductsJob } from './jobs/products/load-products.job';
       },
     ]),
   ],
-  controllers: [],
+  controllers: [JobsController],
   providers: [FibonacciJob, JobsService, JobsResolver, LoadProductsJob],
 })
 export class JobsModule {}

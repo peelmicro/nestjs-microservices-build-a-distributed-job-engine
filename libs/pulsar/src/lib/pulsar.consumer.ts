@@ -6,6 +6,7 @@ import { Logger } from '@nestjs/common';
 export abstract class PulsarConsumer<T> {
   private consumer!: Consumer;
   protected readonly logger = new Logger(this.topic);
+  private processing = false;
 
   constructor(
     private readonly pulsarClient: PulsarClient,
@@ -20,14 +21,20 @@ export abstract class PulsarConsumer<T> {
   }
 
   private async listener(message: Message) {
+    while (this.processing) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    this.processing = true;
     try {
       const data = deserialize<T>(message.getData());
-      this.logger.debug(`Received message: ${JSON.stringify(data, null, 2)}`);
       await this.onMessage(data);
-    } catch (err) {
-      this.logger.error(err);
-    } finally {
       await this.consumer.acknowledge(message);
+    } catch (err) {
+      this.logger.error(`[${process.pid}] Error:`, err);
+      await this.consumer.acknowledge(message);
+    } finally {
+      this.processing = false;
     }
   }
 

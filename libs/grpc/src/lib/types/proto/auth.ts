@@ -5,13 +5,10 @@
 // source: auth.proto
 
 /* eslint-disable */
-import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire';
-import {
-  type handleUnaryCall,
-  type UntypedServiceImplementation,
-} from '@grpc/grpc-js';
-import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
-import { Observable } from 'rxjs';
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { type handleUnaryCall, type UntypedServiceImplementation } from "@grpc/grpc-js";
+import { GrpcMethod, GrpcStreamMethod } from "@nestjs/microservices";
+import { Observable } from "rxjs";
 
 export interface AuthenticateRequest {
   token: string;
@@ -23,26 +20,19 @@ export interface User {
 }
 
 function createBaseAuthenticateRequest(): AuthenticateRequest {
-  return { token: '' };
+  return { token: "" };
 }
 
 export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
-  encode(
-    message: AuthenticateRequest,
-    writer: BinaryWriter = new BinaryWriter(),
-  ): BinaryWriter {
-    if (message.token !== '') {
+  encode(message: AuthenticateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.token !== "") {
       writer.uint32(10).string(message.token);
     }
     return writer;
   },
 
-  decode(
-    input: BinaryReader | Uint8Array,
-    length?: number,
-  ): AuthenticateRequest {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
+  decode(input: BinaryReader | Uint8Array, length?: number): AuthenticateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseAuthenticateRequest();
     while (reader.pos < end) {
@@ -67,26 +57,22 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
 };
 
 function createBaseUser(): User {
-  return { id: 0, email: '' };
+  return { id: 0, email: "" };
 }
 
 export const User: MessageFns<User> = {
-  encode(
-    message: User,
-    writer: BinaryWriter = new BinaryWriter(),
-  ): BinaryWriter {
+  encode(message: User, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.id !== 0) {
       writer.uint32(8).int32(message.id);
     }
-    if (message.email !== '') {
+    if (message.email !== "") {
       writer.uint32(18).string(message.email);
     }
     return writer;
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): User {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseUser();
     while (reader.pos < end) {
@@ -123,53 +109,35 @@ export interface AuthServiceClient {
 }
 
 export interface AuthServiceController {
-  authenticate(
-    request: AuthenticateRequest,
-  ): Promise<User> | Observable<User> | User;
+  authenticate(request: AuthenticateRequest): Promise<User> | Observable<User> | User;
 }
 
 export function AuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ['authenticate'];
+    const grpcMethods: string[] = ["authenticate"];
     for (const method of grpcMethods) {
-      const descriptor: any = Reflect.getOwnPropertyDescriptor(
-        constructor.prototype,
-        method,
-      );
-      GrpcMethod('AuthService', method)(
-        constructor.prototype[method],
-        method,
-        descriptor,
-      );
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("AuthService", method)(constructor.prototype[method], method, descriptor);
     }
     const grpcStreamMethods: string[] = [];
     for (const method of grpcStreamMethods) {
-      const descriptor: any = Reflect.getOwnPropertyDescriptor(
-        constructor.prototype,
-        method,
-      );
-      GrpcStreamMethod('AuthService', method)(
-        constructor.prototype[method],
-        method,
-        descriptor,
-      );
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("AuthService", method)(constructor.prototype[method], method, descriptor);
     }
   };
 }
 
-export const AUTH_SERVICE_NAME = 'AuthService';
+export const AUTH_SERVICE_NAME = "AuthService";
 
 export type AuthServiceService = typeof AuthServiceService;
 export const AuthServiceService = {
   authenticate: {
-    path: '/auth.AuthService/Authenticate',
+    path: "/auth.AuthService/Authenticate",
     requestStream: false,
     responseStream: false,
-    requestSerialize: (value: AuthenticateRequest) =>
-      Buffer.from(AuthenticateRequest.encode(value).finish()),
+    requestSerialize: (value: AuthenticateRequest) => Buffer.from(AuthenticateRequest.encode(value).finish()),
     requestDeserialize: (value: Buffer) => AuthenticateRequest.decode(value),
-    responseSerialize: (value: User) =>
-      Buffer.from(User.encode(value).finish()),
+    responseSerialize: (value: User) => Buffer.from(User.encode(value).finish()),
     responseDeserialize: (value: Buffer) => User.decode(value),
   },
 } as const;
