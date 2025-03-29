@@ -1838,3 +1838,506 @@ COPY --from=builder /workspace/dist ./dist
 
 CMD ["node", "dist/apps/jobs/main"]
 ```
+
+### 13.7 Updating the `Helm` chart to include the jobs database
+
+#### 13.7.1 Updating the `values.yaml` document
+
+- We need to update the `values.yaml` document to:
+  - include the creation of the `jobs` database.
+  - update the `port` property for the `jobs` service to include `http` and `grpc` ports.
+
+> charts/jobber/values.yaml
+
+```diff
+global:
+  imagePullPolicy: Always
+
+pulsar:
+  namespace: pulsar
+  namespaceCreate: true
+  # Disable VictoriaMetrics components completely
+  victoria-metrics-k8s-stack:
+    enabled: false
+# Disable monitoring components
+  zookeeper:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  broker:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  bookkeeper:
+    replicaCount: 1
+    podMonitor:
+      enabled: false
+  autorecovery:
+    podMonitor:
+      enabled: false
+  proxy:
+    podMonitor:
+      enabled: false
+  kube-prometheus-stack:
+    enabled: false
+    prometheusOperator:
+      enabled: false
+    grafana:
+      enabled: false
+    alertmanager:
+      enabled: false
+    prometheus:
+      enabled: false
+
+  # Minimal deployment
+  components:
+    zookeeper: true
+    bookkeeper: true
+    broker: true
+    proxy: false
+    autorecovery: false
+    functions: false
+    toolset: true
+
+postgresql:
+  namespaceOverride: postgresql
+  auth:
+    username: postgres
+    password: postgres
+  primary:
+    initdb:
+      scripts:
+        create-dbs.sql: |
+          CREATE DATABASE auth;
+          CREATE DATABASE products;
++         CREATE DATABASE jobs;
+jobs:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/jobs:latest
++ port:
++   http: 3001
++   grpc: 5002
+
+executor:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/executor:latest
+  port: 3002
+
+auth:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/auth:latest
+  port:
+    http: 3000
+    grpc: 5000
+  jwt:
+    secret: CBm2b6nKxeDTl2UOZxbR6YwqDbUmxAJl
+    expirationMs: "28800000"
+
+products:
+  enabled: true
+  replicas: 1
+  image: 072929378285.dkr.ecr.eu-north-1.amazonaws.com/jobber/products:latest
+  port:
+    http: 3003
+    grpc: 5001
+```
+
+#### 13.7.2 Updating the `deployment.yaml` document for the `jobs` service
+
+- We need to update the `deployment.yaml` document to include the `jobs` service.
+
+> charts/jobber/templates/deployment.yaml
+
+```diff
+{{- if .Values.jobs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs
+  labels:
+    app: jobs
+spec:
+  replicas: {{ .Values.jobs.replicas }}
+  selector:
+    matchLabels:
+      app: jobs
+  template:
+    metadata:
+      labels:
+        app: jobs
+    spec:
++      initContainers:
++        - name: prisma-migrate
++          image: {{ .Values.jobs.image }}
++          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
++          command: ["sh", "-c"]
++          args:
++            - |
++              npx prisma migrate deploy --schema=apps/jobs/prisma+/schema.prisma
++          env:
++            {{- include "common.env" . | nindent 12 }}
++            - name: DATABASE_URL
++              value: postgresql://postgres:postgres@{{ .Release+.Name }}-postgresql.postgresql.svc.cluster.local:5432+/jobs
+      containers:
+        - name: jobs
+          image: {{ .Values.jobs.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
++           - containerPort: {{ .Values.jobs.port.http }}
++           - containerPort: {{ .Values.jobs.port.grpc }}
+          env:
+            {{- include "common.env" . | nindent 12 }}
+            - name: AUTH_GRPC_SERVICE_URL
+              value: "auth-grpc:{{ .Values.auth.port.grpc }}"
++           - name: PORT
++             value: "{{ .Values.jobs.port.http }}"
++           - name: JOBS_GRPC_SERVICE_URL
++             value: "0.0.0.0:{{ .Values.jobs.port.grpc }}"
++           - name: DATABASE_URL
++             value: postgresql://postgres:postgres@{{ .Release.Name }}-postgresql.postgresql.svc.cluster.local:5432/jobs
+      volumes:
+        - name: uploads-volume
+          persistentVolumeClaim:
+            claimName: uploads-pvc
+{{- end }}
+```
+
+#### 13.7.3 Updating the `service.yaml` document for the `jobs` service
+
+- We need to rename the `service.yaml` document to `service-http.yaml` .
+
+> charts/jobber/templates/jobs/service-http.yaml
+
+```diff
+{{- if .Values.jobs.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobs-http
+  labels:
+    app: jobs
+spec:
+  type: ClusterIP
+  selector:
+    app: jobs
+  ports:
+    - protocol: TCP
++     port: {{ .Values.jobs.port.http }}
++     targetPort: {{ .Values.jobs.port.http }}
+{{- end }}
+```
+
+#### 13.7.4 Creating the `service-grpc.yaml` document for the `jobs` service
+
+- We need to create the `service-grpc.yaml` document for the `jobs` service.
+
+> charts/jobber/templates/jobs/service-grpc.yaml
+
+```yaml
+{{- if .Values.jobs.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobs-grpc
+  labels:
+    app: jobs
+spec:
+  type: ClusterIP
+  selector:
+    app: jobs
+  ports:
+    - protocol: TCP
+      port: {{ .Values.jobs.port.grpc }}
+      targetPort: {{ .Values.jobs.port.grpc }}
+{{- end }}
+```
+
+#### 13.7.5 We need to recreate the "postgresql" namespace from the `Helm` chart, so that the database is removed
+
+- We need to delete the "postgresql" namespace from the `Helm` chart, so that the database is removed.
+
+```bash
+kubectl delete namespace postgresql
+namespace "postgresql" deleted
+```
+
+- We need to create the "postgresql" namespace manually.
+
+```bash
+kubectl create namespace postgresql
+namespace/postgresql created
+```
+
+- We need to get the persistent volumes
+
+```bash
+ubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                                                           STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+pvc-30631bbf-acf9-4cac-b499-f053403b61bc   50Gi       RWO            Delete           Bound      pulsar/jobber-pulsar-bookie-ledgers-jobber-pulsar-bookie-0      standard       <unset>                          8d
+pvc-32107c69-0f1d-4f95-b338-7320c2efe80e   20Gi       RWO            Delete           Bound      pulsar/jobber-pulsar-zookeeper-data-jobber-pulsar-zookeeper-0   standard       <unset>                          8d
+pvc-4ca1e54a-c71c-402e-b099-5860bc86d927   5Gi        RWX            Delete           Bound      jobber/uploads-pvc                                              standard       <unset>                          3d21h
+pvc-6be8fa39-b46b-4f41-aa8d-630afafb66d0   8Gi        RWO            Delete           Released   postgresql/data-jobber-postgresql-0                             standard       <unset>                          8d
+pvc-b71c5084-ac7c-44bb-bb99-82a9af3edf9e   8Gi        RWO            Delete           Released   postgresql/data-jobber-postgresql-0                             standard       <unset>                          4d8h
+pvc-e0408e9b-bf05-47f9-9373-0966e3bebf49   10Gi       RWO            Delete           Bound      pulsar/jobber-pulsar-bookie-journal-jobber-pulsar-bookie-0      standard       <unset>
+```
+
+- We need to delete the postgresql persistent volumes
+
+```bash
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ kubectl delete pv pvc-6be8fa39-b46b-4f41-aa8d-630
+afafb66d0
+persistentvolume "pvc-6be8fa39-b46b-4f41-aa8d-630afafb66d0" deleted
+juanpabloperez@jpp-PROX15-AMD:~/Training/microservices/nestjs-microservices-build-a-distributed-job-engine$ kubectl delete pv pvc-b71c5084-ac7c-44bb-bb99-82a9af3edf9e
+persistentvolume "pvc-b71c5084-ac7c-44bb-bb99-82a9af3edf9e" deleted
+```
+
+- We need to upgrade the `jobber` `Helm` chart to include the `jobs` service.
+
+```bash
+ helm upgrade jobber ./charts/jobber --namespace jobber
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Sat Mar 29 14:39:26 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 20
+TEST SUITE: None
+```
+
+- We need to execute `kubectl rollout restart deployment -n jobber` to restart the deployment.
+
+```bash
+kubectl rollout restart deployment -n jobber
+deployment.apps/auth restarted
+deployment.apps/executor restarted
+deployment.apps/jobs restarted
+deployment.apps/products restarted
+```
+
+- We need to ensure all the pods are running as expected.
+
+````bash
+kubectl get po -n jobber
+NAME                        READY   STATUS    RESTARTS   AGE
+auth-775df5db69-mc8rq       1/1     Running   0          68m
+executor-85cb986d84-48zvh   1/1     Running   0          12s
+jobs-564d9d58cd-xjrr7       1/1     Running   0          68m
+products-56478989c4-dqqww   1/1     Running   0          68m
+```        10m
+
+#### 13.7.6 We need to test the `jobs` service.
+
+#### 13.7.6.1 We need to use "minikube service tunnel` for the "auh-http" service to create a tunnel to the services.
+
+```bash
+minikube service tunnel auth-http -n jobber
+|-----------|-----------|-------------|--------------|
+| NAMESPACE |   NAME    | TARGET PORT |     URL      |
+|-----------|-----------|-------------|--------------|
+| jobber    | auth-http |             | No node port |
+|-----------|-----------|-------------|--------------|
+😿  service jobber/auth-http has no node port
+❗  Services [jobber/auth-http] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service auth-http.
+|-----------|-----------|-------------|------------------------|
+| NAMESPACE |   NAME    | TARGET PORT |          URL           |
+|-----------|-----------|-------------|------------------------|
+| jobber    | auth-http |             | http://127.0.0.1:36287 |
+|-----------|-----------|-------------|------------------------|
+🎉  Opening service jobber/auth-http in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+````
+
+- Using `Altair GraphQL client` we need to create a new user.
+
+```graphql
+mutation {
+  upsertUser(upsertUserInput: { email: "my-email2@msn.com", password: "MyPassword1!" }) {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+- We get the response from the `Altair GraphQL client`
+
+```json
+{
+  "data": {
+    "upsertUser": {
+      "id": "1",
+      "email": "my-email2@msn.com",
+      "createdAt": "2025-03-25T16:03:44.156Z",
+      "updatedAt": "2025-03-25T16:03:44.156Z"
+    }
+  }
+}
+```
+
+- We need to authenticate with the `jobs` service.
+
+```graphql
+mutation {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword1!" })
+}
+```
+
+- We get the response from the `Altair GraphQL client`
+
+```json
+{
+  "data": {
+    "login": {
+      "id": "1"
+    }
+  }
+}
+```
+
+#### 13.7.6.2 We need to use `minikube service tunnel` for the `jobs-http` service to create a tunnel to the services
+
+- We need to use `minikube service tunnel` for the `products-http` service to create a tunnel to the services.
+
+```bash
+minikube service tunnel jobs-http -n jobber
+|-----------|-----------|-------------|--------------|
+| NAMESPACE |   NAME    | TARGET PORT |     URL      |
+|-----------|-----------|-------------|--------------|
+| jobber    | jobs-http |             | No node port |
+|-----------|-----------|-------------|--------------|
+😿  service jobber/jobs-http has no node port
+❗  Services [jobber/jobs-http] have type "ClusterIP" not meant to be exposed, however for local development minikube allows you to access this !
+🏃  Starting tunnel for service jobs-http.
+|-----------|-----------|-------------|------------------------|
+| NAMESPACE |   NAME    | TARGET PORT |          URL           |
+|-----------|-----------|-------------|------------------------|
+| jobber    | jobs-http |             | http://127.0.0.1:46051 |
+|-----------|-----------|-------------|------------------------|
+🎉  Opening service jobber/jobs-http in default browser...
+❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+Opening in existing browser session.
+```
+
+- We are going to upload a file to the `jobs` service.
+
+```http
+@urlRest = http://127.0.0.1:46051/api
+
+### Upload file
+POST {{urlRest}}/uploads/upload
+Content-Type: multipart/form-data ; boundary=MfnBoundry
+
+--MfnBoundry
+Content-Disposition: form-data; name="file"; filename="products.json"
+Content-Type: application/json
+
+< ./data/products.json
+
+--MfnBoundry--
+```
+
+- And we get this response.
+
+```json
+HTTP/1.1 201 Created
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 87
+ETag: W/"57-hEbo3b0KUFfd0kCOWygdIxV7Hg4"
+Date: Sat, 29 Mar 2025 17:45:33 GMT
+Connection: close
+
+{
+  "message": "File uploaded successfully",
+  "filename": "file-1743270333549-521245438.json"
+}
+```
+
+- We need to execute the `LoadProducts` job from the `Altair GraphQL client`.
+
+```graphql
+mutation {
+  executeJob(executeJobInput: { name: "LoadProducts", data: { fileName: "file-1743270333549-521245438.json" } }) {
+    name
+  }
+}
+```
+
+- And we get this response.
+
+```json
+{
+  "data": {
+    "executeJob": {
+      "name": "LoadProducts"
+    }
+  }
+}
+```
+
+- We need to check the job database to see the job status.
+
+```bash
+kubectl exec --stdin --tty jobber-postgresql-0 -n postgresql -- sh
+$ psql -U postgres -d jobs
+Password for user postgres:
+psql (17.4)
+Type "help" for help.
+
+jobs=# \l
+                                                     List of databases
+   Name    |  Owner   | Encoding | Locale Provider |   Collate   |    Ctype    | Locale | ICU Rules |   Access privileges
+-----------+----------+----------+-----------------+-------------+-------------+--------+-----------+-----------------------
+ auth      | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           |
+ jobber    | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           |
+ jobs      | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           |
+ postgres  | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           |
+ products  | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           |
+ template0 | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =c/postgres          +
+           |          |          |                 |             |             |        |           | postgres=CTc/postgres
+ template1 | postgres | UTF8     | libc            | en_US.UTF-8 | en_US.UTF-8 |        |           | =c/postgres          +
+           |          |          |                 |             |             |        |           | postgres=CTc/postgres
+(7 rows)
+
+jobs=# \dt
+               List of relations
+ Schema |        Name        | Type  |  Owner
+--------+--------------------+-------+----------
+ public | Job                | table | postgres
+ public | _prisma_migrations | table | postgres
+(2 rows)
+
+jobs=# SELECT * FROM "Job";
+ id |     name     |  size  | completed |   status    |         started         | ended
+----+--------------+--------+-----------+-------------+-------------------------+-------
+  1 | LoadProducts | 100000 |     48969 | IN_PROGRESS | 2025-03-29 17:46:44.885 |
+(1 row)
+
+jobs=# SELECT * FROM "Job";
+ id |     name     |  size  | completed |   status    |         started         | ended
+----+--------------+--------+-----------+-------------+-------------------------+-------
+  1 | LoadProducts | 100000 |     56451 | IN_PROGRESS | 2025-03-29 17:46:44.885 |
+(1 row)
+
+jobs=# SELECT * FROM "Job";
+ id |     name     |  size  | completed |   status    |         started         | ended
+----+--------------+--------+-----------+-------------+-------------------------+-------
+  1 | LoadProducts | 100000 |     84738 | IN_PROGRESS | 2025-03-29 17:46:44.885 |
+(1 row)
+
+jobs=# SELECT * FROM "Job";
+ id |     name     |  size  | completed |  status   |         started         |          ended
+----+--------------+--------+-----------+-----------+-------------------------+-------------------------
+  1 | LoadProducts | 100000 |    100000 | COMPLETED | 2025-03-29 17:46:44.885 | 2025-03-29 18:02:00.799
+(1 row)
+```
+
+- We can see that the job has been completed taking around 15 minutes.
+
+#### 13.7.6.3 Refactoring the `jobs` resolver to be able to return our saved job from the database

@@ -1955,7 +1955,7 @@ jobs        ClusterIP   10.107.128.185   <none>        3001/TCP   12m
 - We can access the services from inside the cluster using Minikube.
 
 ```bash
-inikube service jobs -n jobber
+minikube service jobs -n jobber
 |-----------|------|-------------|--------------|
 | NAMESPACE | NAME | TARGET PORT |     URL      |
 |-----------|------|-------------|--------------|

@@ -83,7 +83,7 @@ mutation {
 }
 
 # @urlRest = http://localhost:3001/api
-@urlRest = http://127.0.0.1:44407/api
+@urlRest = http://127.0.0.1:46051/api
 
 ### Upload file
 POST {{urlRest}}/uploads/upload
