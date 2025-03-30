@@ -20,6 +20,7 @@ import { PrismaModule } from './prisma/prisma.module';
       driver: ApolloDriver,
       autoSchemaFile: true,
       plugins: [new GqlLoggingPlugin()],
+      useGlobalPrefix: true,
       playground: {
         settings: {
           'request.credentials': 'include',

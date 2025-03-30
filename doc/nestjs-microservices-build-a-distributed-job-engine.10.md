@@ -2119,18 +2119,18 @@ deployment.apps/products restarted
 
 - We need to ensure all the pods are running as expected.
 
-````bash
+```bash
 kubectl get po -n jobber
 NAME                        READY   STATUS    RESTARTS   AGE
 auth-775df5db69-mc8rq       1/1     Running   0          68m
 executor-85cb986d84-48zvh   1/1     Running   0          12s
 jobs-564d9d58cd-xjrr7       1/1     Running   0          68m
 products-56478989c4-dqqww   1/1     Running   0          68m
-```        10m
+```
 
-#### 13.7.6 We need to test the `jobs` service.
+#### 13.7.6 We need to test the `jobs` service
 
-#### 13.7.6.1 We need to use "minikube service tunnel` for the "auh-http" service to create a tunnel to the services.
+##### 13.7.6.1 We need to use "minikube service tunnel` for the "auh-http" service to create a tunnel to the services.
 
 ```bash
 minikube service tunnel auth-http -n jobber
@@ -2150,7 +2150,7 @@ minikube service tunnel auth-http -n jobber
 🎉  Opening service jobber/auth-http in default browser...
 ❗  Because you are using a Docker driver on linux, the terminal needs to be open to run it.
 Opening in existing browser session.
-````
+```
 
 - Using `Altair GraphQL client` we need to create a new user.
 
@@ -2200,7 +2200,7 @@ mutation {
 }
 ```
 
-#### 13.7.6.2 We need to use `minikube service tunnel` for the `jobs-http` service to create a tunnel to the services
+##### 13.7.6.2 We need to use `minikube service tunnel` for the `jobs-http` service to create a tunnel to the services
 
 - We need to use `minikube service tunnel` for the `products-http` service to create a tunnel to the services.
 
@@ -2340,7 +2340,7 @@ jobs=# SELECT * FROM "Job";
 
 - We can see that the job has been completed taking around 15 minutes.
 
-#### 13.7.6.3 Refactoring the `jobs` resolver to be able to return our saved job from the database
+#### 13.7.7 Refactoring the `jobs` resolver to be able to return our saved job from the database
 
 - We need to create a new `Job` model.
 
@@ -2543,12 +2543,4 @@ export class JobsResolver {
     return this.jobsService.getJob(id);
   }
 }
-```
-
-- We need to refactor the `jobs` service to be able to return our saved job from the database.
-
-> apps/jobs/src/app/jobs.service.ts
-
-```typescript
-
 ```
