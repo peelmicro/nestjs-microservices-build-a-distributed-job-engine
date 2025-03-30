@@ -284,7 +284,7 @@ Status:
 - We can test if we can access the ingress using the `curl` command
 
 ```bash
-curl -v http://jobber-local.com/graphql
+curl -v http://jobber-local.com/auth/graphql
 * Host jobber-local.com:80 was resolved.
 * IPv6: (none)
 * IPv4: 127.0.0.1
@@ -319,4 +319,131 @@ ff02::2 ip6-allrouters
 
 ```bash
 curl -v http://jobber-local.com/auth/graphql
+* Host jobber-local.com:80 was resolved.
+* IPv6: (none)
+* IPv4: 127.0.0.1, 192.168.49.2
+*   Trying 127.0.0.1:80...
+* connect to 127.0.0.1 port 80 from 127.0.0.1 port 55668 failed: Connection refused
+*   Trying 192.168.49.2:80...
+* Connected to jobber-local.com (192.168.49.2) port 80
+> GET /auth/graphql HTTP/1.1
+> Host: jobber-local.com
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/1.1 400 Bad Request
+< Date: Sun, 30 Mar 2025 17:04:24 GMT
+< Content-Type: application/json; charset=utf-8
+< Content-Length: 406
+< Connection: keep-alive
+< X-Powered-By: Express
+< ETag: W/"196-HUCJKwlQurC5GNaaJnH0d+HOnRw"
+<
+{"errors":[{"message":"This operation has been blocked as a potential Cross-Site Request Forgery (CSRF). Please either specify a 'content-type' header (with a type that is not one of application/x-www-form-urlencoded, multipart/form-data, text/plain) or provide a non-empty value for one of the following headers: x-apollo-operation-name, apollo-require-preflight\n","extensions":{"code":"BAD_REQUEST"}}]}
+* Connection #0 to host jobber-local.com left intact
+```
+
+- We need to set up a `csrfPrevention` in the `app.module.ts` file for the auth service by using a `csrfPrevention` setting variable
+
+> apps/auth/.env
+
+```diff
+GRAPHQL_CSRF_PREVENTION=false
+```
+
+> apps/jobs/.env
+
+```diff
+GRAPHQL_CSRF_PREVENTION=false
+```
+
+> apps/auth/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { PrismaModule } from './prisma/prisma.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { UsersModule } from './users/users.module';
+import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module';
+import { LoggerModule } from '@jobber/nestjs';
+import { GqlLoggingPlugin } from '@jobber/graphql';
+
+@Module({
+  imports: [
+    LoggerModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      context: ({ req, res }) => ({ req, res }),
+      autoSchemaFile: true,
+      plugins: [new GqlLoggingPlugin()],
+      useGlobalPrefix: true,
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
++     csrfPrevention: process.env.GRAPHQL_CSRF_PREVENTION === 'true',
+    }),
+    UsersModule,
+    AuthModule,
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+> apps/jobs/src/app/app.module.ts
+
+```diff
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { JobsModule } from './jobs.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { LoggerModule } from '@jobber/nestjs';
+import { GqlLoggingPlugin } from '@jobber/graphql';
+import { UploadsModule } from './uploads/uploads.module';
+import { PrismaModule } from './prisma/prisma.module';
+@Module({
+  imports: [
+    LoggerModule,
+    UploadsModule,
+    PrismaModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    JobsModule,
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
+      plugins: [new GqlLoggingPlugin()],
+      useGlobalPrefix: true,
+      playground: {
+        settings: {
+          'request.credentials': 'include',
+        },
+      },
++     csrfPrevention: process.env.GRAPHQL_CSRF_PREVENTION === 'true',
+    }),
+  ],
+  controllers: [],
+  providers: [],
+})
+export class AppModule {}
+```
+
+> charts/jobber/templates/common.tpl
+
+```diff
+{{- define "common.env" -}}
+- name: PULSAR_SERVICE_URL
+  value: pulsar://{{ .Release.Name }}-pulsar-broker.pulsar.svc.cluster.local:6650
++- name: GRAPHQL_CSRF_PREVENTION
++  value: "false"
+{{- end -}}
 ```
