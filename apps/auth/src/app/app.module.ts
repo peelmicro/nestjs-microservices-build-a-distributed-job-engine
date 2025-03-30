@@ -24,6 +24,7 @@ import { GqlLoggingPlugin } from '@jobber/graphql';
           'request.credentials': 'include',
         },
       },
+      csrfPrevention: process.env.NODE_ENV === 'production',
     }),
     UsersModule,
     AuthModule,

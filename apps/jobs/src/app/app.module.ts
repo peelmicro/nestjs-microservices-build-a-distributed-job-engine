@@ -26,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
           'request.credentials': 'include',
         },
       },
+      csrfPrevention: process.env.NODE_ENV === 'production',
     }),
   ],
   controllers: [],

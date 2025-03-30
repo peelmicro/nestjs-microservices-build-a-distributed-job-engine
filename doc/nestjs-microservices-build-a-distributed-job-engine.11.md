@@ -244,6 +244,19 @@ REVISION: 22
 TEST SUITE: None
 ```
 
+- We also need to execute the `rollout restart` command to ensure that the ingress is running inside our jobber namespace:
+
+```bash
+kubectl rollout restart deployment -n jobber
+deployment.apps/auth restarted
+deployment.apps/executor restarted
+deployment.apps/jobs restarted
+deployment.apps/products restarted
+```
+
+- `helm upgrade` alone won't restart pods if only the image content changed (same tag)
+- `rollout restart` forces all pods to restart, which makes them pull the latest images
+
 - We can ensure that the ingress is running inside our jobber namespace
 
 ```bash
@@ -271,7 +284,7 @@ Status:
 - We can test if we can access the ingress using the `curl` command
 
 ```bash
-curl -v http://jobber-local.com/jobs
+curl -v http://jobber-local.com/graphql
 * Host jobber-local.com:80 was resolved.
 * IPv6: (none)
 * IPv4: 127.0.0.1
@@ -305,5 +318,5 @@ ff02::2 ip6-allrouters
 - We can now try to access the ingress from the `curl` command
 
 ```bash
-curl -v http://jobber-local.com/graphql
+curl -v http://jobber-local.com/auth/graphql
 ```
