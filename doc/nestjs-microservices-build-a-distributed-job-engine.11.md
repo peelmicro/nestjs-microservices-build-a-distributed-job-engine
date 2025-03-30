@@ -231,7 +231,7 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 ```
 
-#### 14.2.3 We need to upgrade our helm and ensure thet ingress is running inside our jubber namespace
+#### 14.2.3 We need to upgrade our helm and ensure that ingress is running inside our jobber namespace
 
 ```bash
 helm upgrade jobber ./charts/jobber -n jobber
@@ -343,7 +343,7 @@ curl -v http://jobber-local.com/auth/graphql
 * Connection #0 to host jobber-local.com left intact
 ```
 
-- We need to set up a `csrfPrevention` in the `app.module.ts` file for the auth service by using a `csrfPrevention` setting variable
+#### 14.2.4 We need to set up a `csrfPrevention` in the `app.module.ts` file for the auth service by using a `csrfPrevention` setting variable
 
 > apps/auth/.env
 
@@ -447,3 +447,83 @@ export class AppModule {}
 +  value: "false"
 {{- end -}}
 ```
+
+#### 14.2.5 We can now test the ingress again
+
+```bash
+curl -v http://jobber-local.com/auth/graphql
+* Host jobber-local.com:80 was resolved.
+* IPv6: (none)
+* IPv4: 127.0.0.1, 192.168.49.2
+*   Trying 127.0.0.1:80...
+* connect to 127.0.0.1 port 80 from 127.0.0.1 port 58510 failed: Connection refused
+*   Trying 192.168.49.2:80...
+* Connected to jobber-local.com (192.168.49.2) port 80
+> GET /auth/graphql HTTP/1.1
+> Host: jobber-local.com
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/1.1 400 Bad Request
+< Date: Sun, 30 Mar 2025 17:39:35 GMT
+< Content-Type: application/json; charset=utf-8
+< Content-Length: 148
+< Connection: keep-alive
+< X-Powered-By: Express
+< cache-control: no-store
+< ETag: W/"94-npaMbIB5erTaplHAdDd5m/mgtR8"
+<
+{"errors":[{"message":"GraphQL operations must contain a non-empty `query` or a `persistedQuery` extension.","extensions":{"code":"BAD_REQUEST"}}]}
+* Connection #0 to host jobber-local.com left intact
+```
+
+- The error is the expected one, because we are not sending any GraphQL query.
+
+#### 14.2.6 Using the `users.http` file to test the ingress
+
+> apps/auth/src/app/users/users.http
+
+```http
+# @url = http://localhost:3000/graphql
+@url = http://jobber-local.com/auth/graphql
+
+### Login
+# @name login
+POST {{url}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  }) {
+    id
+  }
+}
+```
+
+- We see the response from the login mutation
+
+```json
+HTTP/1.1 200 OK
+Date: Sun, 30 Mar 2025 17:51:10 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 30
+Connection: close
+X-Powered-By: Express
+Set-Cookie: Authentication=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc0MzM1NzA3MCwiZXhwIjoxNzQzMzg1ODcwfQ.Bb4BrOElpL8zX-CcoCIfIL6r3wOq9Evdis6LK8aVwrU; Path=/; Expires=Thu, 27 Jun 2080 19:42:20 GMT; HttpOnly
+cache-control: no-store
+ETag: W/"1e-whozyX4FBwy0vj1YOIa0TwPtur0"
+
+{
+  "data": {
+    "login": {
+      "id": "1"
+    }
+  }
+}
+```
+
+- That means that the login mutation is working as expected and we are able to login to the auth service.
+- We can use a unique url for all the services, so we don't need to change the url for each service.

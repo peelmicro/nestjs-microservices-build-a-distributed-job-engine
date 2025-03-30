@@ -1,4 +1,5 @@
-@url = http://localhost:3000/graphql
+# @url = http://localhost:3000/graphql
+@url = http://jobber-local.com/auth/graphql
 
 ### Login
 # @name login
@@ -7,7 +8,10 @@ Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
 mutation {
-  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+  login(loginInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  }) {
     id
   }
 }
