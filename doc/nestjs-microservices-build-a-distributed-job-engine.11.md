@@ -838,3 +838,223 @@ kube-proxy-pqnwk                  1/1     Running   0          23m
 metrics-server-8449d7f9c6-mjvgk   1/1     Running   0          27m
 metrics-server-8449d7f9c6-smnpp   1/1     Running   0          27m
 ```
+
+### 14.6 Setting upp the `AWS Load Balancer Controller`
+
+#### 14.6.1 We need to install the `AWS Load Balancer Controller`
+
+- The `AWS Load Balancer Controller` is a controller that allows us to manage the `AWS Load Balancer` resources.
+- We can follow the instructions from the [AWS Load Balancer Controller installation](hhttps://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/) document.
+
+![AWS Load Balancer Controller installation](images050.png)
+
+- As we can see in the image below, we need to create an `IAM OIDC provider`.
+
+![IAM OIDC provider](images051.png)
+
+- We can create the `IAM OIDC provider` by executing the following command.
+
+```bash
+eksctl utils associate-iam-oidc-provider \
+    --region eu-north-1 \
+    --cluster jobber \
+    --approve
+2025-03-31 14:28:46 [ℹ]  will create IAM Open ID Connect provider for cluster "jobber" in "eu-north-1"
+2025-03-31 14:28:46 [✔]  created IAM Open ID Connect provider for cluster "jobber" in "eu-north-1"
+```
+
+- Now, we have to Download the "IAM policy for the LBC"
+
+![Dowload IAM policy for the LBC](images052.png)
+
+- We can download the `IAM policy for the LBC` by executing the following command.
+
+```bash
+curl -o iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.12.0/docs/install/iam_policy.json
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  8912  100  8912    0     0  26136      0 --:--:-- --:--:-- --:--:-- 26134
+```
+
+- We can create the `IAM policy for the LBC` by executing the following command.
+
+![Create the IAM policy for the LBC](images053.png)
+
+```bash
+aws iam create-policy \
+    --policy-name AWSLoadBalancerControllerIAMPolicy \
+    --policy-document file://iam-policy.json
+{
+    "Policy": {
+        "PolicyName": "AWSLoadBalancerControllerIAMPolicy",
+        "PolicyId": "ANPARB6XN77WXN5SLDCX6",
+        "Arn": "arn:aws:iam::072929378285:policy/AWSLoadBalancerControllerIAMPolicy",
+        "Path": "/",
+        "DefaultVersionId": "v1",
+        "AttachmentCount": 0,
+        "PermissionsBoundaryUsageCount": 0,
+        "IsAttachable": true,
+        "CreateDate": "2025-03-31T13:33:52+00:00",
+        "UpdateDate": "2025-03-31T13:33:52+00:00"
+    }
+}
+```
+
+- We can create the `IAM role for the LBC` by executing the following command.
+- We need to use the "Arn" value from the previous command to attach the policy to the role.
+
+![Create the IAM role for the LBC](images054.png)
+
+```bash
+eksctl create iamserviceaccount \
+    --cluster jobber \
+    --namespace kube-system \
+    --name aws-load-balancer-controller \
+    --attach-policy-arn arn:aws:iam::072929378285:policy/AWSLoadBalancerControllerIAMPolicy \
+    --override-existing-serviceaccounts \
+    --region eu-north-1 \
+    --approve
+2025-03-31 14:38:34 [ℹ]  1 iamserviceaccount (kube-system/aws-load-balancer-controller) was included (based on the include/exclude rules)
+2025-03-31 14:38:34 [!]  metadata of serviceaccounts that exist in Kubernetes will be updated, as --override-existing-serviceaccounts was set
+2025-03-31 14:38:34 [ℹ]  1 task: {
+    2 sequential sub-tasks: {
+        create IAM role for serviceaccount "kube-system/aws-load-balancer-controller",
+        create serviceaccount "kube-system/aws-load-balancer-controller",
+    } }2025-03-31 14:38:34 [ℹ]  building iamserviceaccount stack "eksctl-jobber-addon-iamserviceaccount-kube-system-aws-load-balancer-controller"
+2025-03-31 14:38:35 [ℹ]  deploying stack "eksctl-jobber-addon-iamserviceaccount-kube-system-aws-load-balancer-controller"
+2025-03-31 14:38:35 [ℹ]  waiting for CloudFormation stack "eksctl-jobber-addon-iamserviceaccount-kube-system-aws-load-balancer-controller"
+2025-03-31 14:39:05 [ℹ]  waiting for CloudFormation stack "eksctl-jobber-addon-iamserviceaccount-kube-system-aws-load-balancer-controller"
+2025-03-31 14:39:06 [ℹ]  created serviceaccount "kube-system/aws-load-balancer-controller"
+```
+
+- We need to add the `EKS` chart repo to Helm
+
+![Add the EKS chart repo to Helm](images055.png)
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+"eks" has been added to your repositories
+```
+
+- We need to install Helm command for clusters with "IRSA":
+
+![Install Helm command for clusters with "IRSA"](images056.png)
+
+```bash
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+    --namespace kube-system \
+    --set clusterName=jobber \
+    --set serviceAccount.create=false \
+    --set serviceAccount.name=aws-load-balancer-controller
+NAME: aws-load-balancer-controller
+LAST DEPLOYED: Mon Mar 31 14:46:15 2025
+NAMESPACE: kube-system
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+AWS Load Balancer controller installed!
+```
+
+- We can check the `pods` by executing the following command.
+- We should see the `aws-load-balancer-controller` pod running.
+- This load balancer controller is going to watch for any ingress resources that get created in our cluster and automatically provision an AWS application load balancer in the cloud in order to expose that ingress to the public internet without us having to do anything.
+
+```bash
+kubectl get po -n kube-system
+NAME                                          READY   STATUS    RESTARTS   AGE
+aws-load-balancer-controller-d88554f4-74r2z   1/1     Running   0          48s
+aws-load-balancer-controller-d88554f4-flfcl   1/1     Running   0          48s
+aws-node-rmzcl                                2/2     Running   0          70m
+aws-node-rt6k8                                2/2     Running   0          70m
+coredns-b59df9565-2l7jb                       1/1     Running   0          74m
+coredns-b59df9565-sqvth                       1/1     Running   0          74m
+kube-proxy-4npkf                              1/1     Running   0          70m
+kube-proxy-pqnwk                              1/1     Running   0          70m
+metrics-server-8449d7f9c6-mjvgk               1/1     Running   0          74m
+metrics-server-8449d7f9c6-smnpp               1/1     Running   0          74m
+```
+
+### 14.7 Setting up the `Amazon EBS CSI driver`
+
+#### 14.7.1 We need to install the `Amazon EBS CSI driver`
+
+- EBS stands for Elastic Block Storage and it's used to persist storage in the cloud.
+- The `Amazon EBS CSI driver` is a CSI driver that allows us to manage the `Amazon EBS` volumes.
+- We can follow the instructions from the [Store Kubernetes volumes with Amazon EBS](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html#managing-ebs-csi) document.
+
+![Store Kubernetes volumes](images057.png)
+
+- We need to create an "IAM role" for the `Amazon EBS CSI driver`.
+
+![Create an IAM role for the Amazon EBS CSI driver](images058.png)
+
+- We can install the `Amazon EBS CSI driver` by executing the following command.
+
+```bash
+eksctl create iamserviceaccount \
+    --name ebs-csi-controller-sa \
+    --namespace kube-system \
+    --cluster jobber \
+    --role-name AmazonEKS_EBS_CSI_Driver_Policy \
+    --role-only \
+    --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
+    --approve
+2025-03-31 15:01:16 [ℹ]  1 existing iamserviceaccount(s) (kube-system/aws-load-balancer-controller) will be excluded
+2025-03-31 15:01:16 [ℹ]  1 iamserviceaccount (kube-system/ebs-csi-controller-sa) was included (based on the include/exclude rules)
+2025-03-31 15:01:16 [!]  serviceaccounts in Kubernetes will not be created or modified, since the option --role-only is used
+2025-03-31 15:01:16 [ℹ]  1 task: { create IAM role for serviceaccount "kube-system/ebs-csi-controller-sa" }
+2025-03-31 15:01:16 [ℹ]  building iamserviceaccount stack "eksctl-jobber-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa"
+2025-03-31 15:01:16 [ℹ]  deploying stack "eksctl-jobber-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa"
+2025-03-31 15:01:16 [ℹ]  waiting for CloudFormation stack "eksctl-jobber-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa"
+2025-03-31 15:01:47 [ℹ]  waiting for CloudFormation stack "eksctl-jobber-addon-iamserviceaccount-kube-system-ebs-csi-controller-sa"
+```
+
+- Before we can install the `Amazon EBS CSI driver` we need to go to the AmazonEKS_EBS_CSI_Driver_Policy we have just created and copy the "ARN", because we need to use it to install the `Amazon EBS CSI driver add-on`.
+
+![Access the AmazonEKS_EBS_CSI_Driver_Policy](images059.png)
+
+- We can copy the "ARN" value.
+
+![Copy the ARN](images060.png)
+
+- `ARN: arn:aws:iam::072929378285:role/AmazonEKS_EBS_CSI_Driver_Policy`
+
+- We can install the `Amazon EBS CSI driver` by executing the following command.
+
+```bash
+eksctl create addon \
+    --name aws-ebs-csi-driver \
+    --cluster jobber \
+    --region eu-north-1 \
+    --service-account-role-arn arn:aws:iam::072929378285:role/AmazonEKS_EBS_CSI_Driver_Policy \
+    --force
+2025-03-31 15:13:40 [ℹ]  Kubernetes version "1.32" in use by cluster "jobber"
+2025-03-31 15:13:41 [ℹ]  IRSA is set for "aws-ebs-csi-driver" addon; will use this to configure IAM permissions
+2025-03-31 15:13:41 [!]  the recommended way to provide IAM permissions for "aws-ebs-csi-driver" addon is via pod identity associations; after addon creation is completed, run `eksctl utils migrate-to-pod-identity`
+2025-03-31 15:13:41 [ℹ]  using provided ServiceAccountRoleARN "arn:aws:iam::072929378285:role/AmazonEKS_EBS_CSI_Driver_Policy"
+2025-03-31 15:13:41 [ℹ]  creating addon: aws-ebs-csi-driver
+```
+
+- We can check the `pods` by executing the following command.
+- We should see the `ebs-csi-controller` and `ebs-csi-node` pods running.
+- These pods are now going to watch for persistent volumes that we create with a correct storage class.
+
+```bash
+kubectl get po -n kube-system
+NAME                                          READY   STATUS    RESTARTS   AGE
+aws-load-balancer-controller-d88554f4-74r2z   1/1     Running   0          28m
+aws-load-balancer-controller-d88554f4-flfcl   1/1     Running   0          28m
+aws-node-rmzcl                                2/2     Running   0          98m
+aws-node-rt6k8                                2/2     Running   0          98m
+coredns-b59df9565-2l7jb                       1/1     Running   0          102m
+coredns-b59df9565-sqvth                       1/1     Running   0          102m
+ebs-csi-controller-69bc78cf87-ns5q5           6/6     Running   0          56s
+ebs-csi-controller-69bc78cf87-pkltn           6/6     Running   0          56s
+ebs-csi-node-729f7                            3/3     Running   0          56s
+ebs-csi-node-7mrq5                            3/3     Running   0          56s
+kube-proxy-4npkf                              1/1     Running   0          98m
+kube-proxy-pqnwk                              1/1     Running   0          98m
+metrics-server-8449d7f9c6-mjvgk               1/1     Running   0          102m
+metrics-server-8449d7f9c6-smnpp               1/1     Running   0          102m
+```
