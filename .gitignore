@@ -43,3 +43,5 @@ Thumbs.db
 
 data/*
 apps/jobs/uploads/*
+
+aws/*
