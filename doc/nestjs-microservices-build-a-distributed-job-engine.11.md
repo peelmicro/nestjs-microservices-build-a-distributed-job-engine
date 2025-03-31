@@ -1058,3 +1058,134 @@ kube-proxy-pqnwk                              1/1     Running   0          98m
 metrics-server-8449d7f9c6-mjvgk               1/1     Running   0          102m
 metrics-server-8449d7f9c6-smnpp               1/1     Running   0          102m
 ```
+
+### 14.8 Modifying the `Jobber Helm Chart` to be able to deploy it to `AWS EKS`
+
+#### 14.8.1 We need to modify the `Jobber Helm Chart` to be able to deploy it to `AWS EKS`
+
+- We need to take advantage of the `AWS Load Balancer Controller` and the `Amazon EBS CSI driver` to deploy the `Jobber` application to `AWS EKS`.
+
+- We need to create the `values-aws.yaml` file to be able to deploy the `Jobber` application to `AWS EKS`.
+
+> charts/jobber/values-aws.yaml
+
+```yaml
+ingress:
+  alb: true
+
+persistence:
+  ebs: true
+
+auth:
+  jwt:
+    secure: true
+
+pulsar:
+  global:
+    storageClass: 'ebs-sc'
+
+  zookeeper:
+    persistence:
+      storageClass: 'ebs-sc'
+    volumes:
+      data:
+        storageClassName: 'ebs-sc'
+
+  bookkeeper:
+    volumes:
+      journal:
+        storageClassName: 'ebs-sc'
+      ledgers:
+        storageClassName: 'ebs-sc'
+
+postgresql:
+  primary:
+    resources:
+      limits:
+        cpu: 1
+    persistence:
+      storageClass: 'ebs-sc'
+```
+
+- We need to modify the `ingress.yaml` file to be able to deploy it to `AWS EKS`.
+
+> charts/jobber/templates/ingress.yaml
+
+```diff
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
++{{- if .Values.ingress.alb }}
++  annotations:
++    alb.ingress.kubernetes.io/scheme: internet-facing
++    alb.ingress.kubernetes.io/target-type: ip
++    alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }, { "HTTPS": 443 }]'
++    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6
++    alb.ingress.kubernetes.io/ssl-redirect: "443"
++{{- end }}
+spec:
++{{- if .Values.ingress.alb }}
++  ingressClassName: alb
++{{- end }}
+  rules:
+-   - host: jobber-local.com
++   - host: {{ if .Values.ingress.alb }} jobber-backend.com {{ else }} jobber-local.com {{ end }}
+      http:
+        paths:
+          - path: /jobs
+            pathType: Prefix
+            backend:
+              service:
+                name: jobs-http
+                port:
+                  number: {{ .Values.jobs.port.http }}
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-http
+                port:
+                  number: {{ .Values.auth.port.http }}
+```
+
+- We need to create the new `storage-class.yaml` file to be able to deploy it to `AWS EKS`.
+
+> charts/jobber/templates/storage-class.yaml
+
+```yaml
+{{- if .Values.persistence.ebs }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-sc
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp3
+{{- end }}
+```
+
+- We need to modify the `pvc.yaml` file for the `jobs` service to be able to deploy it to `AWS EKS`.
+
+> charts/jobber/templates/jobs/pvc.yaml
+
+```diff
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+spec:
+  accessModes:
++    {{- if .Values.persistence.ebs }}
++    - ReadWriteOnce
++    {{- else }}
+    - ReadWriteMany
++    {{- end }}
+  resources:
+    requests:
+      storage: 5Gi
++  {{- if .Values.persistence.ebs }}
++  storageClassName: ebs-sc
++  {{- end}}
+```
