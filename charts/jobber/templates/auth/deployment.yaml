@@ -38,6 +38,10 @@ spec:
             {{- include "common.env" . | nindent 12 }}
             - name: PORT
               value: "{{ .Values.auth.port.http }}"
+            {{- if .Values.auth.jwt.secure }}
+            - name: SECURE_COOKIE
+              value: "{{ .Values.auth.jwt.secure }}"
+            {{- end }}
             - name: JWT_SECRET
               value: {{ .Values.auth.jwt.secret }}
             - name: JWT_EXPIRATION_MS
@@ -47,3 +51,4 @@ spec:
             - name: DATABASE_URL
               value: postgresql://postgres:postgres@{{ .Release.Name }}-postgresql.postgresql.svc.cluster.local:5432/auth
 {{- end }}
+

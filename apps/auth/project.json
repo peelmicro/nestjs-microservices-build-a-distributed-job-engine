@@ -23,6 +23,7 @@
       "defaultConfiguration": "development",
       "dependsOn": ["build"],
       "options": {
+        "port": 9229,
         "buildTarget": "auth:build",
         "runBuildTargetDependencies": true
       },

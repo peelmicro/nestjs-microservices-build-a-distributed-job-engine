@@ -1550,7 +1550,7 @@ TEST SUITE: None
 - We need to rollout the `aws-load-balancer-controller` pods:
 
 ```bash
-ubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 deployment.apps/aws-load-balancer-controller restarted
 ```
 

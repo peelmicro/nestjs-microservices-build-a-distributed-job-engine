@@ -1,8 +1,13 @@
-# @url = http://localhost:3000/graphql
+# @url = http://localhost:3000/auth/graphql
 # @url = http://jobber-local.com/auth/graphql
 # @ host = jobber-local.com
-@url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
-@host = jobber-backend.com
+# @url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
+
+# @host = jobber-backend.com
+
+@url = http://jobber.peelmicro.info/auth/graphql
+
+@host = jobber.peelmicro.info
 ### Login
 # @name login
 POST {{url}}
@@ -105,8 +110,8 @@ X-REQUEST-TYPE: GraphQL
 
 mutation {
   upsertUser(upsertUserInput: {
-    email: "my-email2@msn.com",
-    password: "MyPassword1!"
+    email: "my-email3@msn.com",
+    password: "MyPassword3!"
   })
   {
     id
