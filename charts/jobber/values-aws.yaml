@@ -11,7 +11,7 @@ auth:
 pulsar:
   global:
     storageClass: "ebs-sc"
-  
+
   zookeeper:
     persistence:
       storageClass: "ebs-sc"

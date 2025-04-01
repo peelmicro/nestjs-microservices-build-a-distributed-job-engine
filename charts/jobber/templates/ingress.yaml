@@ -6,16 +6,19 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }, { "HTTPS": 443 }]'
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/group.name: my-ingress-group
+    alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }]'
+    # alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }, { "HTTPS": 443 }]'
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-north-1:072929378285:certificate/18f73880-e502-4436-9dff-ffe847064fc5
+    # alb.ingress.kubernetes.io/ssl-redirect: "443"
 {{- end }}
 spec:
 {{- if .Values.ingress.alb }}
   ingressClassName: alb
 {{- end }}
   rules:
-    - host: {{ if .Values.ingress.alb }} jobber-backend.com {{ else }} jobber-local.com {{ end }}
+    - host:
+      {{ if .Values.ingress.alb }} jobber-backend.com {{ else }} jobber-local.com {{ end }}
       http:
         paths:
           - path: /jobs

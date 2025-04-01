@@ -1189,3 +1189,622 @@ spec:
 +  storageClassName: ebs-sc
 +  {{- end}}
 ```
+
+#### 14.8.2 We need to modify the `roles` for the `eksctl add-on IAM service account`
+
+- We need to modify the `roles` for the `eksctl add-on IAM service account` to be able to deploy it to `AWS EKS`.
+
+![Modify the roles for the eksctl add-on IAM service account](images061.png)
+
+- We need to mosify the `AWSLoadBalancerControllerIAMPolicy` policy:
+
+![Modify the AWSLoadBalancerControllerIAMPolicy policy](images062.png)
+
+- We need to click on `JSON` and then on `Edit` to be able to modify the policy.
+
+![Update the AWSLoadBalancerControllerIAMPolicy policy](images063.png)
+
+- We need to ensure that the `elasticloadbalancing:DescribeListenerAttributes` policy has been added:
+
+![Ensure DescribeListenerAttributes policy is added to the AWSLoadBalancerControllerIAMPolicy policy](images064.png)
+
+#### 14.8.3 We need to ensure the `Jobber` application is deployed to `AWS EKS`
+
+- We need to check the current `namespaces` by executing the following command:
+
+```bash
+kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   3h35m
+kube-node-lease   Active   3h35m
+kube-public       Active   3h35m
+kube-system       Active   3h35m
+```
+
+- We need to create the `postgresql` namespace by executing the following command:
+
+```bash
+kubectl create namespace postgresql
+namespace/postgresql created
+```
+
+- We need to install the `jobber` helm chart by executing the following command:
+
+```bash
+helm install jobber ./charts/jobber -n jobber --create-namespace --values ./charts/jobber/values-aws.yaml
+coalesce.go:237: warning: skipped value for pulsar.persistence: Not a table.
+NAME: jobber
+LAST DEPLOYED: Mon Mar 31 18:14:52 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+```
+
+- We need to check the `namespaces` by executing the following command:
+
+```bash
+kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   3h46m
+jobber            Active   50s
+kube-node-lease   Active   3h46m
+kube-public       Active   3h46m
+kube-system       Active   3h46m
+postgresql        Active   9m24s
+pulsar            Active   50s
+```
+
+- We need to check the `pods` by executing the following command:
+
+```bash
+kubectl get pods -n jobber
+NAME                        READY   STATUS    RESTARTS        AGE
+auth-6557955857-j8wgw       1/1     Running   0               4m33s
+executor-78b8864ff-nm4rs    1/1     Running   4 (2m31s ago)   4m33s
+jobs-5fd88f9d7b-s6c5g       1/1     Running   0               4m33s
+products-865ff79986-b4qgb   1/1     Running   0               4m33s
+```
+
+- We need to check the `pvc` volumnes in `jobber` namespace by executing the following command:
+
+```bash
+kubectl get pvc -n jobber
+NAME          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+uploads-pvc   Bound    pvc-044e7cee-09a2-47f0-aa0b-1dd996c218b7   5Gi        RWO            ebs-sc         <unset>                 5m39s
+```
+
+- We need to check the `pvc` volumnes in `postgresql` namespace by executing the following command:
+
+```bash
+kubectl get pvc -n postgresql
+NAME                       STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+data-jobber-postgresql-0   Bound    pvc-9f9f7d2c-ad2d-491c-a595-53a0ebb44dc8   8Gi        RWO            ebs-sc         <unset>                 6m56s
+```
+
+- We need to check the `pvc` volumnes in `pulsar` namespace by executing the following command:
+
+```bash
+kubectl get pvc -n pulsar
+NAME                                                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+jobber-pulsar-bookie-journal-jobber-pulsar-bookie-0      Bound    pvc-3310f5b1-b53d-4043-bed5-2c772145bede   10Gi       RWO            ebs-sc         <unset>                 7m40s
+jobber-pulsar-bookie-ledgers-jobber-pulsar-bookie-0      Bound    pvc-bd4bf327-98f9-4c41-a071-f23e150103aa   50Gi       RWO            ebs-sc         <unset>                 7m40s
+jobber-pulsar-zookeeper-data-jobber-pulsar-zookeeper-0   Bound    pvc-d8b1034a-6a7a-4764-9bd9-83af5ac7d012   20Gi       RWO            ebs-sc         <unset>                 7m40s
+```
+
+- We need to check the `ingress` in `jobber` namespace by executing the following command:
+
+```bash
+kubectl get ingress -n jobber
+NAME      CLASS   HOSTS                ADDRESS   PORTS   AGE
+ingress   alb     jobber-backend.com             80      8m49s
+```
+
+- We are supposed to get the ADDRESS.
+- The empty ADDRESS field in your ingress output is normal - it typically takes a few minutes for the AWS Load Balancer Controller to provision and configure the Application Load Balancer (ALB).
+
+- We can check if the `ALB` controller pods are running properly:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+NAME                                          READY   STATUS    RESTARTS   AGE
+aws-load-balancer-controller-d88554f4-74r2z   1/1     Running   0          163m
+aws-load-balancer-controller-d88554f4-flfcl   1/1     Running   0          163m
+```
+
+- We can check the `ALB` controller logs by executing the following command:
+
+```bash
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+{"level":"info","ts":"2025-03-31T16:18:01Z","logger":"controllers.ingress","msg":"creating listener","stackID":"jobber/ingress","resourceID":"443"}
+{"level":"error","ts":"2025-03-31T16:18:01Z","msg":"Reconciler error","controller":"ingress","object":{"name":"ingress","namespace":"jobber"},"namespace":"jobber","name":"ingress","reconcileID":"2604dbee-3ae7-4251-842d-42fab12abbcb","error":"operation error Elastic Load Balancing v2: CreateListener, https response error StatusCode: 400, RequestID: b05eb9e2-327c-49b3-9fe8-f279c211de43, api error ValidationError: Certificate ARN 'arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6' is not valid"}
+{"level":"info","ts":"2025-03-31T16:20:45Z","logger":"controllers.ingress","msg":"Auto Create SG","LB SGs":[{"$ref":"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID"},"sg-01bebf0dbf30c9432"],"backend SG":"sg-01bebf0dbf30c9432"}
+{"level":"info","ts":"2025-03-31T16:20:45Z","logger":"controllers.ingress","msg":"successfully built model","model":"{\"id\":\"jobber/ingress\",\"resources\":{\"AWS::EC2::SecurityGroup\":{\"ManagedLBSecurityGroup\":{\"spec\":{\"groupName\":\"k8s-jobber-ingress-c412c33841\",\"description\":\"[k8s] Managed SecurityGroup for LoadBalancer\",\"ingress\":[{\"ipProtocol\":\"tcp\",\"fromPort\":443,\"toPort\":443,\"ipRanges\":[{\"cidrIP\":\"0.0.0.0/0\"}]},{\"ipProtocol\":\"tcp\",\"fromPort\":80,\"toPort\":80,\"ipRanges\":[{\"cidrIP\":\"0.0.0.0/0\"}]}]}}},\"AWS::ElasticLoadBalancingV2::Listener\":{\"443\":{\"spec\":{\"loadBalancerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::LoadBalancer/LoadBalancer/status/loadBalancerARN\"},\"port\":443,\"protocol\":\"HTTPS\",\"defaultActions\":[{\"type\":\"fixed-response\",\"fixedResponseConfig\":{\"contentType\":\"text/plain\",\"statusCode\":\"404\"}}],\"certificates\":[{\"certificateARN\":\"arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6\"}],\"sslPolicy\":\"ELBSecurityPolicy-2016-08\"}},\"80\":{\"spec\":{\"loadBalancerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::LoadBalancer/LoadBalancer/status/loadBalancerARN\"},\"port\":80,\"protocol\":\"HTTP\",\"defaultActions\":[{\"type\":\"redirect\",\"redirectConfig\":{\"port\":\"443\",\"protocol\":\"HTTPS\",\"statusCode\":\"HTTP_301\"}}]}}},\"AWS::ElasticLoadBalancingV2::ListenerRule\":{\"443:1\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/443/status/listenerARN\"},\"priority\":1,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/jobs\",\"/jobs/*\"]}}]}},\"443:2\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/443/status/listenerARN\"},\"priority\":2,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/auth\",\"/auth/*\"]}}]}}},\"AWS::ElasticLoadBalancingV2::LoadBalancer\":{\"LoadBalancer\":{\"spec\":{\"name\":\"k8s-jobber-ingress-86bcb3fcfc\",\"type\":\"application\",\"scheme\":\"internet-facing\",\"ipAddressType\":\"ipv4\",\"subnetMapping\":[{\"subnetID\":\"subnet-0007eb0d55b6beb0c\"},{\"subnetID\":\"subnet-0c6589b7016d9a9e7\"},{\"subnetID\":\"subnet-0e096700420b9035a\"}],\"securityGroups\":[{\"$ref\":\"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID\"},\"sg-01bebf0dbf30c9432\"]}}},\"AWS::ElasticLoadBalancingV2::TargetGroup\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"name\":\"k8s-jobber-authhttp-98be096a8f\",\"targetType\":\"ip\",\"port\":3000,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"name\":\"k8s-jobber-jobshttp-8f1cc828a8\",\"targetType\":\"ip\",\"port\":3001,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}}},\"K8S::ElasticLoadBalancingV2::TargetGroupBinding\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-authhttp-98be096a8f\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"auth-http\",\"port\":3000},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-01bebf0dbf30c9432\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3000}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-jobshttp-8f1cc828a8\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"jobs-http\",\"port\":3001},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-01bebf0dbf30c9432\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3001}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}}}}}"}
+{"level":"info","ts":"2025-03-31T16:20:45Z","logger":"controllers.ingress","msg":"creating listener","stackID":"jobber/ingress","resourceID":"443"}
+{"level":"error","ts":"2025-03-31T16:20:45Z","msg":"Reconciler error","controller":"ingress","object":{"name":"ingress","namespace":"jobber"},"namespace":"jobber","name":"ingress","reconcileID":"1555af36-1721-49fc-983e-57da433ade1c","error":"operation error Elastic Load Balancing v2: CreateListener, https response error StatusCode: 400, RequestID: b953826f-7f19-4dac-8d6e-9e252ce8f943, api error ValidationError: Certificate ARN 'arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6' is not valid"}
+{"level":"info","ts":"2025-03-31T16:26:13Z","logger":"controllers.ingress","msg":"Auto Create SG","LB SGs":[{"$ref":"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID"},"sg-01bebf0dbf30c9432"],"backend SG":"sg-01bebf0dbf30c9432"}
+{"level":"info","ts":"2025-03-31T16:26:13Z","logger":"controllers.ingress","msg":"successfully built model","model":"{\"id\":\"jobber/ingress\",\"resources\":{\"AWS::EC2::SecurityGroup\":{\"ManagedLBSecurityGroup\":{\"spec\":{\"groupName\":\"k8s-jobber-ingress-c412c33841\",\"description\":\"[k8s] Managed SecurityGroup for LoadBalancer\",\"ingress\":[{\"ipProtocol\":\"tcp\",\"fromPort\":80,\"toPort\":80,\"ipRanges\":[{\"cidrIP\":\"0.0.0.0/0\"}]},{\"ipProtocol\":\"tcp\",\"fromPort\":443,\"toPort\":443,\"ipRanges\":[{\"cidrIP\":\"0.0.0.0/0\"}]}]}}},\"AWS::ElasticLoadBalancingV2::Listener\":{\"443\":{\"spec\":{\"loadBalancerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::LoadBalancer/LoadBalancer/status/loadBalancerARN\"},\"port\":443,\"protocol\":\"HTTPS\",\"defaultActions\":[{\"type\":\"fixed-response\",\"fixedResponseConfig\":{\"contentType\":\"text/plain\",\"statusCode\":\"404\"}}],\"certificates\":[{\"certificateARN\":\"arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6\"}],\"sslPolicy\":\"ELBSecurityPolicy-2016-08\"}},\"80\":{\"spec\":{\"loadBalancerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::LoadBalancer/LoadBalancer/status/loadBalancerARN\"},\"port\":80,\"protocol\":\"HTTP\",\"defaultActions\":[{\"type\":\"redirect\",\"redirectConfig\":{\"port\":\"443\",\"protocol\":\"HTTPS\",\"statusCode\":\"HTTP_301\"}}]}}},\"AWS::ElasticLoadBalancingV2::ListenerRule\":{\"443:1\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/443/status/listenerARN\"},\"priority\":1,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/jobs\",\"/jobs/*\"]}}]}},\"443:2\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/443/status/listenerARN\"},\"priority\":2,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/auth\",\"/auth/*\"]}}]}}},\"AWS::ElasticLoadBalancingV2::LoadBalancer\":{\"LoadBalancer\":{\"spec\":{\"name\":\"k8s-jobber-ingress-86bcb3fcfc\",\"type\":\"application\",\"scheme\":\"internet-facing\",\"ipAddressType\":\"ipv4\",\"subnetMapping\":[{\"subnetID\":\"subnet-0007eb0d55b6beb0c\"},{\"subnetID\":\"subnet-0c6589b7016d9a9e7\"},{\"subnetID\":\"subnet-0e096700420b9035a\"}],\"securityGroups\":[{\"$ref\":\"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID\"},\"sg-01bebf0dbf30c9432\"]}}},\"AWS::ElasticLoadBalancingV2::TargetGroup\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"name\":\"k8s-jobber-authhttp-98be096a8f\",\"targetType\":\"ip\",\"port\":3000,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"name\":\"k8s-jobber-jobshttp-8f1cc828a8\",\"targetType\":\"ip\",\"port\":3001,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}}},\"K8S::ElasticLoadBalancingV2::TargetGroupBinding\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-authhttp-98be096a8f\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"auth-http\",\"port\":3000},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-01bebf0dbf30c9432\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3000}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-jobshttp-8f1cc828a8\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"jobs-http\",\"port\":3001},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-01bebf0dbf30c9432\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3001}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}}}}}"}
+{"level":"info","ts":"2025-03-31T16:26:14Z","logger":"controllers.ingress","msg":"creating listener","stackID":"jobber/ingress","resourceID":"443"}
+{"level":"error","ts":"2025-03-31T16:26:14Z","msg":"Reconciler error","controller":"ingress","object":{"name":"ingress","namespace":"jobber"},"namespace":"jobber","name":"ingress","reconcileID":"b0b2247b-9400-4c65-8a01-cab592313f73","error":"operation error Elastic Load Balancing v2: CreateListener, https response error StatusCode: 400, RequestID: 89405e86-73de-48c5-8a47-a0f50b24c619, api error ValidationError: Certificate ARN 'arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6' is not valid"}
+{"level":"info","ts":"2025-03-31T13:46:24Z","logger":"setup","msg":"starting deferred tgb reconciler"}
+{"level":"info","ts":"2025-03-31T13:46:24Z","logger":"setup","msg":"starting podInfo repo"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.metrics","msg":"Starting metrics server"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","msg":"starting server","name":"health probe","addr":"[::]:61779"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.metrics","msg":"Serving metrics server","bindAddress":":8080","secure":false}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.webhook","msg":"Starting webhook server"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.certwatcher","msg":"Updated current TLS certificate"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.webhook","msg":"Serving webhook server","host":"","port":9443}
+{"level":"info","ts":"2025-03-31T13:46:26Z","logger":"controller-runtime.certwatcher","msg":"Starting certificate watcher"}
+{"level":"info","ts":"2025-03-31T13:46:26Z","msg":"attempting to acquire leader lease kube-system/aws-load-balancer-controller-leader..."}
+```
+
+- The problem is the certificate that we are using in the ingress.yaml document is not valid: `alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6`
+
+#### 14.8.4 Create a new certificate
+
+- We need to access `Certificate Manager`
+
+![Access Certificate Manager](images065.png)
+
+- We need to click on `Request a certificate`
+
+![Click on Request a certificate](images066.png)
+
+- We need to `request a public certificate`.
+
+![request a public certificate](images067.png)
+
+- We need to put the `jobber-backend.com`
+
+![Use the jobber-backend.com dcomain](images068.png)
+
+- We get this "ARN":
+
+`arn:aws:acm:eu-north-1:072929378285:certificate/18f73880-e502-4436-9dff-ffe847064fc5`
+
+- We need to update the `ingress.yaml` document to put it:
+
+> charts/jobber/templates/ingress.yaml
+
+```diff
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
+{{- if .Values.ingress.alb }}
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }, { "HTTPS": 443 }]'
+-   alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:905418201315:certificate/823799ce-2e91-41bf-bfaf-75449e5c0da6
++   alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-north-1:072929378285:certificate/18f73880-e502-4436-9dff-ffe847064fc5
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+{{- end }}
+spec:
+{{- if .Values.ingress.alb }}
+  ingressClassName: alb
+{{- end }}
+  rules:
+    - host: {{ if .Values.ingress.alb }} jobber-backend.com {{ else }} jobber-local.com {{ end }}
+      http:
+        paths:
+          - path: /jobs
+            pathType: Prefix
+            backend:
+              service:
+                name: jobs-http
+                port:
+                  number: {{ .Values.jobs.port.http }}
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-http
+                port:
+                  number: {{ .Values.auth.port.http }}
+```
+
+- We need to upgrade the Helm Chart by executing:
+
+```bash
+helm upgrade jobber ./charts/jobber -n jobber --values ./charts/jobber/values-aws.yaml
+coalesce.go:237: warning: skipped value for pulsar.persistence: Not a table.
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Mon Mar 31 19:43:02 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+```
+
+- We need to rollout the `aws-load-balancer-controller` pods
+
+```bash
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+deployment.apps/aws-load-balancer-controller restarted
+```
+
+- We need to ensure the pods are recreated:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+NAME                                            READY   STATUS    RESTARTS   AGE
+aws-load-balancer-controller-56c7969656-ll4nv   1/1     Running   0          28s
+aws-load-balancer-controller-56c7969656-v8dhc   1/1     Running   0          16s
+```
+
+- And we need to ensure there are no errors in the logs:
+
+```bash
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+{"level":"info","ts":"2025-03-31T17:45:32Z","logger":"setup","msg":"starting podInfo repo"}
+{"level":"info","ts":"2025-03-31T17:45:32Z","logger":"setup","msg":"starting deferred tgb reconciler"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.metrics","msg":"Starting metrics server"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","msg":"starting server","name":"health probe","addr":"[::]:61779"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.metrics","msg":"Serving metrics server","bindAddress":":8080","secure":false}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.webhook","msg":"Starting webhook server"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.certwatcher","msg":"Updated current TLS certificate"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.webhook","msg":"Serving webhook server","host":"","port":9443}
+{"level":"info","ts":"2025-03-31T17:45:34Z","logger":"controller-runtime.certwatcher","msg":"Starting certificate watcher"}
+{"level":"info","ts":"2025-03-31T17:45:34Z","msg":"attempting to acquire leader lease kube-system/aws-load-balancer-controller-leader..."}
+{"level":"info","ts":"2025-03-31T17:45:44Z","logger":"setup","msg":"starting podInfo repo"}
+{"level":"info","ts":"2025-03-31T17:45:44Z","logger":"setup","msg":"starting deferred tgb reconciler"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","msg":"starting server","name":"health probe","addr":"[::]:61779"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.metrics","msg":"Starting metrics server"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.webhook","msg":"Starting webhook server"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.metrics","msg":"Serving metrics server","bindAddress":":8080","secure":false}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.certwatcher","msg":"Updated current TLS certificate"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.webhook","msg":"Serving webhook server","host":"","port":9443}
+{"level":"info","ts":"2025-03-31T17:45:46Z","logger":"controller-runtime.certwatcher","msg":"Starting certificate watcher"}
+{"level":"info","ts":"2025-03-31T17:45:46Z","msg":"attempting to acquire leader lease kube-system/aws-load-balancer-controller-leader..."}
+```
+
+- We need to delete the `ingress`
+
+```bash
+kubectl delete ingress ingress -n jobber
+ingress.networking.k8s.io "ingress" deleted
+```
+
+- We need to upgrade the helm chart:
+
+```bash
+helm upgrade jobber ./charts/jobber -n jobber --values ./charts/jobber/values-aws.yaml
+coalesce.go:237: warning: skipped value for pulsar.persistence: Not a table.
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Mon Mar 31 19:52:11 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 4
+TEST SUITE: None
+```
+
+- It is still not working because it seems that the certificate is not valid.
+- We are going to simplify the ingress.yaml document by removing the annontaion that we son't need at the moment:
+
+> charts/jobber/templates/ingress.yaml
+
+```diff
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
+{{- if .Values.ingress.alb }}
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
++   alb.ingress.kubernetes.io/group.name: my-ingress-group
+    alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }]'
++   # alb.ingress.kubernetes.io/listen-ports: '[{ "HTTP": 80 }, { "HTTPS": 443 }]'
++   # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-north-1:072929378285:certificate/18f73880-e502-4436-9dff-ffe847064fc5
++   # alb.ingress.kubernetes.io/ssl-redirect: "443"
+{{- end }}
+spec:
+{{- if .Values.ingress.alb }}
+  ingressClassName: alb
+{{- end }}
+  rules:
+    - host:
+      {{ if .Values.ingress.alb }} jobber-backend.com {{ else }} jobber-local.com {{ end }}
+      http:
+        paths:
+          - path: /jobs
+            pathType: Prefix
+            backend:
+              service:
+                name: jobs-http
+                port:
+                  number: {{ .Values.jobs.port.http }}
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-http
+                port:
+                  number: {{ .Values.auth.port.http }}
+```
+
+- We need to delete the ingress:
+
+```bash
+kubectl delete ingress ingress -n jobber
+ingress.networking.k8s.io "ingress" deleted
+```
+
+- We need to upgrade the helm chart:
+
+```bash
+helm upgrade jobber ./charts/jobber -n jobber --values ./charts/jobber/values-aws.yaml
+coalesce.go:237: warning: skipped value for pulsar.persistence: Not a table.
+Release "jobber" has been upgraded. Happy Helming!
+NAME: jobber
+LAST DEPLOYED: Tue Apr  1 08:32:53 2025
+NAMESPACE: jobber
+STATUS: deployed
+REVISION: 5
+TEST SUITE: None
+```
+
+- We need to rollout the `aws-load-balancer-controller` pods:
+
+```bash
+ubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+deployment.apps/aws-load-balancer-controller restarted
+```
+
+- We need to ensure the pods are recreated:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+NAME                                           READY   STATUS    RESTARTS   AGE
+aws-load-balancer-controller-5fb789bb4-7p8jt   1/1     Running   0          70s
+aws-load-balancer-controller-5fb789bb4-sw59h   1/1     Running   0          59s
+```
+
+- And we need to ensure there are no errors in the logs:
+
+```bash
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+{"level":"info","ts":"2025-04-01T06:49:55Z","msg":"Starting workers","controller":"ingress","worker count":3}
+{"level":"info","ts":"2025-04-01T06:49:55Z","msg":"Starting workers","controller":"service","worker count":3}
+{"level":"info","ts":"2025-04-01T06:49:55Z","msg":"Starting workers","controller":"targetGroupBinding","controllerGroup":"elbv2.k8s.aws","controllerKind":"TargetGroupBinding","worker count":3}
+{"level":"info","ts":"2025-04-01T06:49:55Z","msg":"Skipping targetgroupbinding reconcile","tgb":{"name":"k8s-jobber-authhttp-54e2616ae9","namespace":"jobber"},"calculated hash":"K9kUiLUHcHZuOxov9FmR9f_35Zx0fRApT0qg35GjxOM/dhs08uETiF5w5JmtvuQft7qTHKuPEX6oXebV_S7LJbw"}
+{"level":"info","ts":"2025-04-01T06:49:55Z","msg":"Skipping targetgroupbinding reconcile","tgb":{"name":"k8s-jobber-jobshttp-70de410328","namespace":"jobber"},"calculated hash":"N_3GOeglDeAdxNywJ30aKlCFi4jLLH7AuVnOuxNb7Uw/8TRroSmqCPC9KNwS7tmUyltYQ7OfZ-FEwU9EJc5kpuk"}
+{"level":"info","ts":"2025-04-01T06:49:55Z","logger":"controllers.ingress","msg":"Auto Create SG","LB SGs":[{"$ref":"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID"},"sg-054ef9b5a389d5c00"],"backend SG":"sg-054ef9b5a389d5c00"}
+{"level":"info","ts":"2025-04-01T06:49:55Z","logger":"controllers.ingress","msg":"successfully built model","model":"{\"id\":\"my-ingress-group\",\"resources\":{\"AWS::EC2::SecurityGroup\":{\"ManagedLBSecurityGroup\":{\"spec\":{\"groupName\":\"k8s-myingressgroup-d4c60b60a0\",\"description\":\"[k8s] Managed SecurityGroup for LoadBalancer\",\"ingress\":[{\"ipProtocol\":\"tcp\",\"fromPort\":80,\"toPort\":80,\"ipRanges\":[{\"cidrIP\":\"0.0.0.0/0\"}]}]}}},\"AWS::ElasticLoadBalancingV2::Listener\":{\"80\":{\"spec\":{\"loadBalancerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::LoadBalancer/LoadBalancer/status/loadBalancerARN\"},\"port\":80,\"protocol\":\"HTTP\",\"defaultActions\":[{\"type\":\"fixed-response\",\"fixedResponseConfig\":{\"contentType\":\"text/plain\",\"statusCode\":\"404\"}}]}}},\"AWS::ElasticLoadBalancingV2::ListenerRule\":{\"80:1\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/80/status/listenerARN\"},\"priority\":1,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/jobs\",\"/jobs/*\"]}}]}},\"80:2\":{\"spec\":{\"listenerARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::Listener/80/status/listenerARN\"},\"priority\":2,\"actions\":[{\"type\":\"forward\",\"forwardConfig\":{\"targetGroups\":[{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"}}]}}],\"conditions\":[{\"field\":\"host-header\",\"hostHeaderConfig\":{\"values\":[\"jobber-backend.com\"]}},{\"field\":\"path-pattern\",\"pathPatternConfig\":{\"values\":[\"/auth\",\"/auth/*\"]}}]}}},\"AWS::ElasticLoadBalancingV2::LoadBalancer\":{\"LoadBalancer\":{\"spec\":{\"name\":\"k8s-myingressgroup-9cf944356d\",\"type\":\"application\",\"scheme\":\"internet-facing\",\"ipAddressType\":\"ipv4\",\"subnetMapping\":[{\"subnetID\":\"subnet-0007eb0d55b6beb0c\"},{\"subnetID\":\"subnet-0c6589b7016d9a9e7\"},{\"subnetID\":\"subnet-0e096700420b9035a\"}],\"securityGroups\":[{\"$ref\":\"#/resources/AWS::EC2::SecurityGroup/ManagedLBSecurityGroup/status/groupID\"},\"sg-054ef9b5a389d5c00\"]}}},\"AWS::ElasticLoadBalancingV2::TargetGroup\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"name\":\"k8s-jobber-authhttp-54e2616ae9\",\"targetType\":\"ip\",\"port\":3000,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"name\":\"k8s-jobber-jobshttp-70de410328\",\"targetType\":\"ip\",\"port\":3001,\"protocol\":\"HTTP\",\"protocolVersion\":\"HTTP1\",\"ipAddressType\":\"ipv4\",\"healthCheckConfig\":{\"port\":\"traffic-port\",\"protocol\":\"HTTP\",\"path\":\"/\",\"matcher\":{\"httpCode\":\"200\"},\"intervalSeconds\":15,\"timeoutSeconds\":5,\"healthyThresholdCount\":2,\"unhealthyThresholdCount\":2}}}},\"K8S::ElasticLoadBalancingV2::TargetGroupBinding\":{\"jobber/ingress-auth-http:3000\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-authhttp-54e2616ae9\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-auth-http:3000/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"auth-http\",\"port\":3000},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-054ef9b5a389d5c00\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3000}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}},\"jobber/ingress-jobs-http:3001\":{\"spec\":{\"template\":{\"metadata\":{\"name\":\"k8s-jobber-jobshttp-70de410328\",\"namespace\":\"jobber\",\"creationTimestamp\":null},\"spec\":{\"targetGroupARN\":{\"$ref\":\"#/resources/AWS::ElasticLoadBalancingV2::TargetGroup/jobber/ingress-jobs-http:3001/status/targetGroupARN\"},\"targetType\":\"ip\",\"serviceRef\":{\"name\":\"jobs-http\",\"port\":3001},\"networking\":{\"ingress\":[{\"from\":[{\"securityGroup\":{\"groupID\":\"sg-054ef9b5a389d5c00\"}}],\"ports\":[{\"protocol\":\"TCP\",\"port\":3001}]}]},\"ipAddressType\":\"ipv4\",\"vpcID\":\"vpc-010680def416ce229\"}}}}}}}"}
+{"level":"info","ts":"2025-04-01T06:49:57Z","logger":"controllers.ingress","msg":"modifying listener rule","stackID":"my-ingress-group","resourceID":"80:2","arn":"arn:aws:elasticloadbalancing:eu-north-1:072929378285:listener-rule/app/k8s-myingressgroup-9cf944356d/8537c26d31596070/5560f8f41cc83396/53b36ac94edf9594"}
+{"level":"info","ts":"2025-04-01T06:49:57Z","logger":"controllers.ingress","msg":"modified listener rule","stackID":"my-ingress-group","resourceID":"80:2","arn":"arn:aws:elasticloadbalancing:eu-north-1:072929378285:listener-rule/app/k8s-myingressgroup-9cf944356d/8537c26d31596070/5560f8f41cc83396/53b36ac94edf9594"}
+{"level":"info","ts":"2025-04-01T06:49:57Z","logger":"controllers.ingress","msg":"successfully deployed model","ingressGroup":"my-ingress-group"}
+{"level":"info","ts":"2025-04-01T06:49:27Z","logger":"setup","msg":"starting deferred tgb reconciler"}
+{"level":"info","ts":"2025-04-01T06:49:27Z","logger":"setup","msg":"starting podInfo repo"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.metrics","msg":"Starting metrics server"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.metrics","msg":"Serving metrics server","bindAddress":":8080","secure":false}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.webhook","msg":"Starting webhook server"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","msg":"starting server","name":"health probe","addr":"[::]:61779"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.certwatcher","msg":"Updated current TLS certificate"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.webhook","msg":"Serving webhook server","host":"","port":9443}
+{"level":"info","ts":"2025-04-01T06:49:29Z","logger":"controller-runtime.certwatcher","msg":"Starting certificate watcher"}
+{"level":"info","ts":"2025-04-01T06:49:29Z","msg":"attempting to acquire leader lease kube-system/aws-load-balancer-controller-leader..."}
+```
+
+- We can see that the ingress is working:
+
+```bash
+kubectl get ingress -n jobber
+NAME      CLASS   HOSTS                ADDRESS                                                                 PORTS   AGE
+ingress   alb     jobber-backend.com   k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com   80      17m
+```
+
+- We need to update the `users.http` file to use add the `Host` header:
+
+> apps/auth/src/app/users/users.http
+
+```http
+# @url = http://localhost:3000/graphql
+# @url = http://jobber-local.com/auth/graphql
+# @ host = jobber-local.com
+@url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
+@host = jobber-backend.com
+### Login
+# @name login
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  }) {
+    id
+  }
+}
+
+### Install httpbin and run using docker with "docker run -p 80:80 kennethreitz/httpbin"
+
+GET http://0.0.0.0:80/anything
+Content-Type: application/json
+X-Full-Response: {{login.response.body.*}}
+
+### Get all users
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  users
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by email
+
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  userByEmail(email: "my-email2@msn.com")
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user by id
+
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  user(id: 1)
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Get a user from the cookie
+
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  getUserFromCookie
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Create a user
+
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+
+### Update password for a user
+
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  upsertUser(upsertUserInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!",
+    newPassword: "MyPassword2!"
+  })
+  {
+    id
+    email
+    createdAt
+    updatedAt
+  }
+}
+```
+
+- if we execute:
+
+> apps/auth/src/app/users/users.http
+
+```bash
+@url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
+@host = jobber-backend.com
+### Login
+# @name login
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+X-REQUEST-TYPE: GraphQL
+
+mutation {
+  login(loginInput: {
+    email: "my-email2@msn.com",
+    password: "MyPassword1!"
+  }) {
+    id
+  }
+}
+```
+
+- we get the following response:
+
+> apps/auth/src/app/users/users.http
+
+```json
+HTTP/1.1 200 OK
+Date: Tue, 01 Apr 2025 08:15:50 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 256
+Connection: close
+X-Powered-By: Express
+cache-control: no-store
+ETag: W/"100-j6eWmhjyQyXt0rWikA85hNMaFag"
+
+{
+  "errors": [
+    {
+      "message": "Credentials are not valid.",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "login"
+      ],
+      "extensions": {
+        "code": "UNAUTHENTICATED",
+        "originalError": {
+          "message": "Credentials are not valid.",
+          "error": "Unauthorized",
+          "statusCode": 401
+        }
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+- That means that the ingress is working now.

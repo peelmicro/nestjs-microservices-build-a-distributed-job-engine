@@ -1,6 +1,9 @@
 global:
   imagePullPolicy: Always
 
+ingress:
+  alb: false
+
 pulsar:
   namespace: pulsar
   namespaceCreate: true

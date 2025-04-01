@@ -1,9 +1,12 @@
 # @url = http://localhost:3000/graphql
-@url = http://jobber-local.com/auth/graphql
-
+# @url = http://jobber-local.com/auth/graphql
+# @ host = jobber-local.com
+@url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
+@host = jobber-backend.com
 ### Login
 # @name login
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
@@ -24,6 +27,7 @@ X-Full-Response: {{login.response.body.*}}
 
 ### Get all users
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -41,6 +45,7 @@ query {
 ### Get a user by email
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -58,6 +63,7 @@ query {
 ### Get a user by id
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -75,6 +81,7 @@ query {
 ### Get a user from the cookie
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -92,6 +99,7 @@ query {
 ### Create a user
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
@@ -111,6 +119,7 @@ mutation {
 ### Update password for a user
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 

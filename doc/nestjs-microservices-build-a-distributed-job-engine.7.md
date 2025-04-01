@@ -2349,7 +2349,7 @@ auth:
 
 > Request:
 
-```
+```graphql
 mutation {
   login(loginInput: { email: "my-email2@msn.com", password: "MyPassword1!" }) {
     id
