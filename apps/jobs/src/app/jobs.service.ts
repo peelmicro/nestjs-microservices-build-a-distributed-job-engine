@@ -69,10 +69,7 @@ export class JobsService implements OnModuleInit {
     }
 
     // Return a Job object with the metadata
-    return {
-      name: job.meta.name,
-      description: job.meta.description,
-    };
+    return job;
   }
 
   async acknowledge(jobId: number) {

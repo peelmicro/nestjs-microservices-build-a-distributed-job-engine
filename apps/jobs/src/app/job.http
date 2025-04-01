@@ -1,15 +1,22 @@
-@urlLogin = http://localhost:3000/graphql
+# @urlLogin = http://localhost:3000/graphql
 
-@url = http://localhost:3001/graphql
+# @url = http://localhost:3001/graphql
 
+# @urlLogin = http://jobber-local.com/auth/graphql
+# @ host = jobber-local.com
+
+@urlLogin = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/auth/graphql
+@url = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/jobs/graphql
+@host = jobber-backend.com
 ### Login
 # @name login
 POST {{urlLogin}}
+Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
 mutation {
-  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword2!" }) {
+  login(loginInput: { email: "my-email2@msn.com", password: "MyPassword1!" }) {
     id
   }
 }
@@ -21,6 +28,7 @@ X-Full-Response: {{login.response.body.*}}
 
 ### Get jobs metadata
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -34,6 +42,7 @@ query {
 
 ### Execute Fibonacci job with invalid name
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -46,6 +55,7 @@ mutation {
 
 ### Execute Fibonacci job with one message
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -58,6 +68,7 @@ mutation {
 
 ### Execute Fibonacci job with multiple messages
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -72,6 +83,7 @@ mutation {
 ### Execute Fibonacci job with invalid data
 
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -83,10 +95,13 @@ mutation {
 }
 
 # @urlRest = http://localhost:3001/api
-@urlRest = http://127.0.0.1:46051/api
+#@urlRest = http://127.0.0.1:46051/api
+#@urlRest = http://jobber-local.com/jobs
+@urlRest = http://k8s-myingressgroup-9cf944356d-2123168966.eu-north-1.elb.amazonaws.com/jobs
 
 ### Upload file
 POST {{urlRest}}/uploads/upload
+Host: {{host}}
 Content-Type: multipart/form-data ; boundary=MfnBoundry
 
 --MfnBoundry
@@ -100,12 +115,52 @@ Content-Type: application/json
 
 ### Execute Load Products job with one filename
 POST {{url}}
+Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
 
 mutation {
-  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1742659574274-319632607.json"}}) {
+  executeJob(executeJobInput: {name: "LoadProducts", data: {fileName: "file-1743496662577-722169074.json"}}) {
     name
   }
 }
+
+### Get job by id
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  job(id: 1) {
+    id
+    name
+    size
+    status
+    started
+    ended
+    completed
+  }
+}
+
+### Get job by name
+POST {{url}}
+Host: {{host}}
+Content-Type: application/json
+Cookie: {{login.response.headers.Set-Cookie}}
+X-REQUEST-TYPE: GraphQL
+
+query {
+  jobByName(name: "LoadProducts") {
+    id
+    name
+    size
+    status
+    started
+    ended
+    completed
+  }
+}
+

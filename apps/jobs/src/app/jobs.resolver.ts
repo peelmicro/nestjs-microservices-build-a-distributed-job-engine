@@ -40,4 +40,10 @@ export class JobsResolver {
   async getJob(@Args('id') id: number) {
     return this.jobsService.getJob(id);
   }
+
+  @Query(() => Job, { name: 'jobByName' })
+  @UseGuards(GqlAuthGuard)
+  async getJobByName(@Args('name') name: string) {
+    return this.jobsService.getJobByName(name);
+  }
 }
