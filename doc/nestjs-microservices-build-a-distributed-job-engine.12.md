@@ -1740,3 +1740,1483 @@ yarn serve:all
 - We need to start the debugger for the services with want to debug:
 
 ![Start the debugger](images093.png)
+
+## 16 Stop the AWS services
+
+### 16.1 Check the current costs
+
+We can see the current costs of the AWS services for just one day:
+
+![AWS costs](images094.png)
+
+![AWS detailed costs](images095.png)
+
+### 16.2 Scaling the executor service to just 1 instance
+
+We can scale the executor service to just 1 instance by running the following command:
+
+```bash
+kubectl scale deployment executor --replicas=1 -n jobber
+deployment.apps/executor scaled
+```
+
+- We need to ensure that only 1 instance is running:
+
+```bash
+kubectl get po -n jobber
+NAME                        READY   STATUS    RESTARTS      AGE
+auth-67cb9c98-bjhz4         1/1     Running   0             14h
+executor-78b8864ff-nm4rs    1/1     Running   4 (39h ago)   39h
+jobs-5fd88f9d7b-s6c5g       1/1     Running   0             39h
+products-865ff79986-b4qgb   1/1     Running   0             39h
+```
+
+### 16.3 Stopping the Elastic Compute Cloud (EC2) instances
+
+- List the running instances to find their IDs:
+
+```bash
+aws ec2 describe-instances --query "Reservations[*].Instances[*].InstanceId" --output text
+i-0b8019bfb73fe0bf1
+i-05c3df34196ee6533
+```
+
+- Stop the instances using its ID:
+
+```bash
+aws ec2 stop-instances --instance-ids i-0b8019bfb73fe0bf1
+{
+    "StoppingInstances": [
+        {
+            "InstanceId": "i-0b8019bfb73fe0bf1",
+            "CurrentState": {
+                "Code": 64,
+                "Name": "stopping"
+            },
+            "PreviousState": {
+                "Code": 16,
+                "Name": "running"
+            }
+        }
+    ]
+}
+```
+
+- Verify that the instance is stopped:
+
+```bash
+aws ec2 describe-instances --instance-ids i-0b8019bfb73fe0bf1 --query 'Reservations[0].Instances[0].State.Name' --output text
+stopped
+```
+
+- Verify that the instance is stopped:
+
+```bash
+aws ec2 stop-instances --instance-ids i-05c3df34196ee6533aws ec2 stop-instances --instance-ids i-05c3df34196ee6533
+{
+    "StoppingInstances": [
+        {
+            "InstanceId": "i-05c3df34196ee6533",
+            "CurrentState": {
+                "Code": 64,
+                "Name": "stopping"
+            },
+            "PreviousState": {
+                "Code": 16,
+                "Name": "running"
+            }
+        }
+    ]
+}
+```
+
+- Verify that the instance is stopped:
+
+```bash
+aws ec2 describe-instances --instance-ids i-05c3df34196ee6533 --query 'Reservations[0].Instances[0].State.Name' --output text
+stopped
+```
+
+> Note: Stopping an EC2 instance will halt charges for instance hours, but costs for attached resources like Elastic IPs or EBS volumes may still apply.
+
+- We can start them again by executing: `aws ec2 start-instances`
+
+### 16.4 Managing Elastic Container Service for Kubernetes (EKS)
+
+- We can see the current clusters:
+
+```bash
+aws eks list-clusters
+{
+    "clusters": [
+        "jobber"
+    ]
+}
+```
+
+- Or by executing:
+
+```bash
+aws eks list-clusters --query 'clusters[]' --output table
+--------------
+|ListClusters|
++------------+
+|  jobber    |
++------------+
+```
+
+- We need to see what namespaces are available:
+
+```bash
+kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   43h
+jobber            Active   39h
+kube-node-lease   Active   43h
+kube-public       Active   43h
+kube-system       Active   43h
+postgresql        Active   40h
+pulsar            Active   39h
+```
+
+- We should delete all namespaces except the system ones before deleting the cluster. Here's what to do:
+- Safe to delete:
+  - jobber
+  - postgresql
+  - pulsar
+- DON'T delete these system namespaces:
+
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - default
+
+- We can delete the namespaces that are safe to delete by executing:
+
+```bash
+kubectl delete namespace jobber postgresql pulsar
+namespace "jobber" deleted
+namespace "postgresql" deleted
+namespace "pulsar" deleted
+```
+
+- We need to get the nodegroups:
+
+```bash
+aws eks list-nodegroups --cluster-name jobber
+{
+    "nodegroups": [
+        "ng-fa2d9068"
+    ]
+}
+```
+
+- We can delete the nodegroup by executing:
+
+```bash
+aws eks delete-nodegroup --cluster-name jobber --nodegroup-name ng-fa2d9068
+{
+    "nodegroup": {
+        "nodegroupName": "ng-fa2d9068",
+        "nodegroupArn": "arn:aws:eks:eu-north-1:072929378285:nodegroup/jobber/ng-fa2d9068/fecaf619-4c89-f89f-dd67-76dd217605d3",
+        "clusterName": "jobber",
+        "version": "1.32",
+        "releaseVersion": "1.32.1-20250317",
+        "createdAt": "2025-03-31T14:34:56.441000+02:00",
+        "modifiedAt": "2025-04-02T10:15:46.537000+02:00",
+        "status": "DELETING",
+        "capacityType": "ON_DEMAND",
+        "scalingConfig": {
+            "minSize": 2,
+            "maxSize": 2,
+            "desiredSize": 2
+        },
+        "instanceTypes": [
+            "m5.large"
+        ],
+        "subnets": [
+            "subnet-0e096700420b9035a",
+            "subnet-0007eb0d55b6beb0c",
+            "subnet-0c6589b7016d9a9e7"
+        ],
+        "amiType": "AL2_x86_64",
+        "nodeRole": "arn:aws:iam::072929378285:role/eksctl-jobber-nodegroup-n
+g-fa2d906-NodeInstanceRole-J9bgz66OUQlU",
+        "labels": {
+            "alpha.eksctl.io/cluster-name": "jobber",
+            "alpha.eksctl.io/nodegroup-name": "ng-fa2d9068"
+        },
+        "resources": {
+            "autoScalingGroups": [
+                {
+                    "name": "eks-ng-fa2d9068-fecaf619-4c89-f89f-dd67-76dd2176
+05d3"
+                }
+            ]
+        },
+        "health": {
+            "issues": []
+        },
+        "updateConfig": {
+            "maxUnavailable": 1
+        },
+        "launchTemplate": {
+            "name": "eksctl-jobber-nodegroup-ng-fa2d9068",
+            "version": "1",
+            "id": "lt-0ce6f63012401a1f0"
+        },
+        "tags": {
+            "aws:cloudformation:stack-name": "eksctl-jobber-nodegroup-ng-fa2d
+9068",
+            "alpha.eksctl.io/cluster-name": "jobber",
+            "alpha.eksctl.io/nodegroup-name": "ng-fa2d9068",
+            "aws:cloudformation:stack-id": "arn:aws:cloudformation:eu-north-1
+:072929378285:stack/eksctl-jobber-nodegroup-ng-fa2d9068/7bd08b60-0e2c-11f0-b5
+4e-06c8497fa2e9",
+            "eksctl.cluster.k8s.io/v1alpha1/cluster-name": "jobber",
+            "aws:cloudformation:logical-id": "ManagedNodeGroup",
+            "alpha.eksctl.io/nodegroup-type": "managed",
+            "alpha.eksctl.io/eksctl-version": "0.206.0"
+        }
+    }
+}
+```
+
+- We can check the status of the nodegroup by executing:
+
+```bash
+aws eks describe-nodegroup --cluster-name jobber --nodegroup-name ng-fa2d9068
+{
+    "nodegroup": {
+        "nodegroupName": "ng-fa2d9068",
+        "nodegroupArn": "arn:aws:eks:eu-north-1:072929378285:nodegroup/jobber/ng-fa2d9068/fecaf619-4c89-f89f-dd67-76dd217605d3",
+        "clusterName": "jobber",
+        "version": "1.32",
+        "releaseVersion": "1.32.1-20250317",
+        "createdAt": "2025-03-31T14:34:56.441000+02:00",
+        "modifiedAt": "2025-04-02T10:15:46.537000+02:00",
+        "status": "DELETING",
+        "capacityType": "ON_DEMAND",
+        "scalingConfig": {
+            "minSize": 2,
+            "maxSize": 2,
+            "desiredSize": 2
+        },
+        "instanceTypes": [
+            "m5.large"
+        ],
+        "subnets": [
+            "subnet-0e096700420b9035a",
+            "subnet-0007eb0d55b6beb0c",
+            "subnet-0c6589b7016d9a9e7"
+        ],
+        "amiType": "AL2_x86_64",
+        "nodeRole": "arn:aws:iam::072929378285:role/eksctl-jobber-nodegroup-n
+g-fa2d906-NodeInstanceRole-J9bgz66OUQlU",
+        "labels": {
+            "alpha.eksctl.io/cluster-name": "jobber",
+            "alpha.eksctl.io/nodegroup-name": "ng-fa2d9068"
+        },
+        "resources": {
+            "autoScalingGroups": [
+                {
+                    "name": "eks-ng-fa2d9068-fecaf619-4c89-f89f-dd67-76dd2176
+05d3"
+                }
+            ]
+        },
+        "health": {
+            "issues": []
+        },
+        "updateConfig": {
+            "maxUnavailable": 1
+        },
+        "launchTemplate": {
+            "name": "eksctl-jobber-nodegroup-ng-fa2d9068",
+            "version": "1",
+            "id": "lt-0ce6f63012401a1f0"
+        },
+        "tags": {
+            "aws:cloudformation:stack-name": "eksctl-jobber-nodegroup-ng-fa2d
+9068",
+            "alpha.eksctl.io/cluster-name": "jobber",
+            "alpha.eksctl.io/nodegroup-name": "ng-fa2d9068",
+            "aws:cloudformation:stack-id": "arn:aws:cloudformation:eu-north-1
+:072929378285:stack/eksctl-jobber-nodegroup-ng-fa2d9068/7bd08b60-0e2c-11f0-b5
+4e-06c8497fa2e9",
+            "eksctl.cluster.k8s.io/v1alpha1/cluster-name": "jobber",
+            "aws:cloudformation:logical-id": "ManagedNodeGroup",
+            "alpha.eksctl.io/nodegroup-type": "managed",
+            "alpha.eksctl.io/eksctl-version": "0.206.0"
+        }
+    }
+}
+```
+
+- We cannot delete the cluster until the nodegroup is deleted. So, executing the following command should show none:
+
+```bash
+aws eks list-nodegroups --cluster-name jobber
+{
+    "nodegroups": []
+}
+```
+
+- We can delete the cluster by executing:
+
+```bash
+aws eks delete-cluster --name jobber
+{
+    "cluster": {
+        "name": "jobber",
+        "arn": "arn:aws:eks:eu-north-1:072929378285:cluster/jobber",
+        "createdAt": "2025-03-31T14:24:38.671000+02:00",
+        "version": "1.32",
+        "endpoint": "https://88A5A66176B4BC811F2357B4C1CF0EB2.gr7.eu-north-1.eks.amazonaws.com",
+        "roleArn": "arn:aws:iam::072929378285:role/eksctl-jobber-cluster-ServiceRole-ek5cr33W8crA",
+        "resourcesVpcConfig": {
+            "subnetIds": [
+                "subnet-0c6589b7016d9a9e7",
+                "subnet-0e096700420b9035a",
+                "subnet-0007eb0d55b6beb0c",
+                "subnet-0b56a3582da13d69c",
+                "subnet-0cf5501aafdd54d07",
+                "subnet-06f0b07fc8b44203e"
+            ],
+            "securityGroupIds": [
+                "sg-09272c1d81c0c3ee5"
+            ],
+            "clusterSecurityGroupId": "sg-00c2b7ad569e8a5c4",
+            "vpcId": "vpc-010680def416ce229",
+            "endpointPublicAccess": true,
+            "endpointPrivateAccess": false,
+            "publicAccessCidrs": [
+                "0.0.0.0/0"
+            ]
+        },
+        "kubernetesNetworkConfig": {
+            "serviceIpv4Cidr": "10.100.0.0/16",
+            "ipFamily": "ipv4",
+            "elasticLoadBalancing": {
+                "enabled": false
+            }
+        },
+        "logging": {
+            "clusterLogging": [
+                {
+                    "types": [
+                        "api",
+                        "audit",
+                        "authenticator",
+                        "controllerManager",
+                        "scheduler"
+                    ],
+                    "enabled": false
+                }
+            ]
+        },
+        "identity": {
+            "oidc": {
+                "issuer": "https://oidc.eks.eu-north-1.amazonaws.com/id/88A5A
+66176B4BC811F2357B4C1CF0EB2"
+            }
+        },
+        "status": "DELETING",
+        "certificateAuthority": {
+            "data": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURCVENDQWUyZ0F3
+SUJBZ0lJRXE1MDJjWkgza1F3RFFZSktvWklodmNOQVFFTEJRQXdGVEVUTUJFR0ExVUUKQXhNS2EzV
+mlaWEp1WlhSbGN6QWVGdzB5TlRBek16RXhNakkwTURoYUZ3MHpOVEF6TWpreE1qSTVNRGhhTUJVeA
+pFekFSQmdOVkJBTVRDbXQxWW1WeWJtVjBaWE13Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR
+3QXdnZ0VLCkFvSUJBUURJWjdNWlVQSmJYN3d4YVZHS1hCemN3WFZBK1FCZWhNa0RPRjRuQlhBWDN2
+Ykp1cVRLWmt0Vm5maG4KN21NNUNBNXlYaGZWL1k1dGl1aGpqR0gzOTliUmlWbVh5VDh1OW1kOHMwb
+lZWK05aVnJRMStya1dhcW5Ja1VIQwpXcFB2M2k5WkZnb0I4VTRjQXRjVXBjVGlYMkI4V3JEZjNBbX
+ludzhZWCtsWVJUWnJheUZSc3ZVejl0VnVTZjBUClljaGk0aWl1U0ZPUE5Oc2d5cERoUjJtS0NHaGx
+GcFhFdkRuZTJDa0Ira01pTWNyTkNYOTRyS1d3eDRac2xiOHcKeWx5NEM2cmNRR2doN0dsd0VBQ1lK
+SlNXbEZOdjllcEUxUUFkMFN6UUlHZDdjN2Zsak1YbTRRTmJtdmZWNW4rdwo4b2xDa2FjM3VyT1BnK
+2pRVXY1T0Uxc1VrR1JyQWdNQkFBR2pXVEJYTUE0R0ExVWREd0VCL3dRRUF3SUNwREFQCkJnTlZIUk
+1CQWY4RUJUQURBUUgvTUIwR0ExVWREZ1FXQkJSZjhvVG5PcUV5NGV6SnI3Q2hCNndwUFpVNHJqQVY
+KQmdOVkhSRUVEakFNZ2dwcmRXSmxjbTVsZEdWek1BMEdDU3FHU0liM0RRRUJDd1VBQTRJQkFRQld4
+NmxLK2dWZwpBK0tvb2QwL2hnTEF5STkvWVZkc0E2VEVpc1pzMktqZ2JCdmNzdTZCQkZwM3dmNnVVR
+040enFvRHZoM24wQko0CmE5L2hDKy9sQ1pPZ1VLL1FGSjZ2T1RBY2U3S1dTUzd5QzZLeURKaDNTa1
+pSNm1wT0lSeDQxOFl0b0VUUVBtY1UKTE1sUFk3Yi9ZbjFML0dHczNtakZvZUR5ckxvM2xOOHhBY3Z
+XNEk0TmtQSlNqZVB6ZllLT2pVY2t1MTdYampOUwo5VG5EZjBjc1JycUlTc2tvcTl5cW9TYW1MQWZa
+cmpFY2ZoZjhNbTVpMVdyLzFCeUJHaVZEVWlLSEd6di9xUFp6CkljTWswZy9IWitndTlRVU5JOUEvM
+VlQQ3JnZDVLY0xWNkswVEdvK0tMQllGRE1OYm9LOFlxa2tydC9NbXhmdmEKOG5aaVp6ZEFwR1A3Ci
+0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+        },
+        "platformVersion": "eks.5",
+        "tags": {
+            "aws:cloudformation:stack-name": "eksctl-jobber-cluster",
+            "alpha.eksctl.io/cluster-name": "jobber",
+            "aws:cloudformation:stack-id": "arn:aws:cloudformation:eu-north-1
+:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec8
+1",
+            "eksctl.cluster.k8s.io/v1alpha1/cluster-name": "jobber",
+            "alpha.eksctl.io/cluster-oidc-enabled": "true",
+            "aws:cloudformation:logical-id": "ControlPlane",
+            "alpha.eksctl.io/eksctl-version": "0.206.0",
+            "Name": "eksctl-jobber-cluster/ControlPlane"
+        },
+        "accessConfig": {
+            "authenticationMode": "API_AND_CONFIG_MAP"
+        },
+        "upgradePolicy": {
+            "supportType": "EXTENDED"
+        }
+    }
+}
+```
+
+- We can see the cluster has been deleted by executing and ensuring no clusters are returned:
+
+```bash
+aws eks list-clusters
+{
+    "clusters": []
+}
+```
+
+### 16.5 Deleting the Virtual Private Cloud (VPC)
+
+- We need to know the VPC IDs:
+
+```bash
+ aws ec2 describe-vpcs
+{
+    "Vpcs": [
+        {
+            "OwnerId": "072929378285",
+            "InstanceTenancy": "default",
+            "CidrBlockAssociationSet": [
+                {
+                    "AssociationId": "vpc-cidr-assoc-09a47dfc556bceeb7",
+                    "CidrBlock": "192.168.0.0/16",
+                    "CidrBlockState": {
+                        "State": "associated"
+                    }
+                }
+            ],
+            "IsDefault": false,
+            "Tags": [
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "VPC"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/VPC"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:
+stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                }
+            ],
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "VpcId": "vpc-010680def416ce229",
+            "State": "available",
+            "CidrBlock": "192.168.0.0/16",
+            "DhcpOptionsId": "dopt-034eb9a537c66bdea"
+        },
+        {
+            "OwnerId": "072929378285",
+            "InstanceTenancy": "default",
+            "CidrBlockAssociationSet": [
+                {
+                    "AssociationId": "vpc-cidr-assoc-09e7e1e91db21fa0a",
+                    "CidrBlock": "172.31.0.0/16",
+                    "CidrBlockState": {
+                        "State": "associated"
+                    }
+                }
+            ],
+            "IsDefault": true,
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "VpcId": "vpc-0f6ab15fcc616541f",
+            "State": "available",
+            "CidrBlock": "172.31.0.0/16",
+            "DhcpOptionsId": "dopt-034eb9a537c66bdea"
+        }
+    ]
+}
+```
+
+- We can see we have 2 VPCs:
+
+1. vpc-010680def416ce229 (192.168.0.0/16)
+   - This is the EKS cluster VPC (created by eksctl)
+   - Not the default VPC
+   - Named "eksctl-jobber-cluster/VPC"
+   - This is the one we can delete after the EKS cluster is gone
+2. vpc-0f6ab15fcc616541f (172.31.0.0/16)
+   - This is the default VPC (IsDefault": true)
+   - Don't delete this one as it's the default VPC for your account
+
+- We need to check what is there inside the VPC:
+
+1. NAT Gateways
+
+```bash
+aws ec2 describe-nat-gateways --filter Name=vpc-id,Values=vpc-010680def416ce229
+{
+    "NatGateways": [
+        {
+            "CreateTime": "2025-03-31T12:24:33+00:00",
+            "NatGatewayAddresses": [
+                {
+                    "AllocationId": "eipalloc-028e3e43c104b85b7",
+                    "NetworkInterfaceId": "eni-0cec225a297e8dfaf",
+                    "PrivateIp": "192.168.20.146",
+                    "PublicIp": "51.20.146.176",
+                    "AssociationId": "eipassoc-04bfb61748d3a3870",
+                    "IsPrimary": true,
+                    "Status": "succeeded"
+                }
+            ],
+            "NatGatewayId": "nat-012137850a87da93a",
+            "State": "available",
+            "SubnetId": "subnet-0007eb0d55b6beb0c",
+            "VpcId": "vpc-010680def416ce229",
+            "Tags": [
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:
+stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "NATGateway"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/NATGateway"
+                }
+            ],
+            "ConnectivityType": "public"
+        }
+    ]
+}
+```
+
+- We can execute the following command to delete the NAT Gateway:
+
+```bash
+aws ec2 delete-nat-gateway --nat-gateway-id nat-012137850a87da93a
+{
+    "NatGatewayId": "nat-012137850a87da93a"
+}
+```
+
+2. Internet Gateways
+
+```bash
+aws ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=vpc-010680def416ce229
+{
+    "InternetGateways": [
+        {
+            "Attachments": [
+                {
+                    "State": "available",
+                    "VpcId": "vpc-010680def416ce229"
+                }
+            ],
+            "InternetGatewayId": "igw-0d27fd22632ddbde1",
+            "OwnerId": "072929378285",
+            "Tags": [
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "InternetGateway"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/InternetGateway"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                }
+            ]
+        }
+    ]
+}
+```
+
+- We can execute the following command to delete the Internet Gateway:
+
+```bash
+aws ec2 detach-internet-gateway --internet-gateway-id igw-0d27fd22632ddbde1 --vpc-id vpc-010680def416ce229
+aws ec2 delete-internet-gateway --internet-gateway-id igw-0d27fd22632ddbde1
+```
+
+3. Subnets
+
+```bash
+ aws ec2 describe-subnets --filters Name=vpc-id,Values=vpc-010680def416ce229
+{
+    "Subnets": [
+        {
+            "AvailabilityZoneId": "eun1-az3",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPrivateEUNORTH1C"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "kubernetes.io/role/internal-elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPrivateEUNORTH1C"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-06f0b07fc8b44203e",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-06f0b07fc8b44203e",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.160.0/19",
+            "AvailableIpAddressCount": 8187,
+            "AvailabilityZone": "eu-north-1c",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": false
+        },
+        {
+            "AvailabilityZoneId": "eun1-az3",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPublicEUNORTH1C"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "kubernetes.io/role/elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPublicEUNORTH1C"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-0e096700420b9035a",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-0e096700420b9035a",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.64.0/19",
+            "AvailableIpAddressCount": 8187,
+            "AvailabilityZone": "eu-north-1c",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": true
+        },
+        {
+            "AvailabilityZoneId": "eun1-az1",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPublicEUNORTH1A"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPublicEUNORTH1A"
+                },
+                {
+                    "Key": "kubernetes.io/role/elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-0007eb0d55b6beb0c",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-0007eb0d55b6beb0c",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.0.0/19",
+            "AvailableIpAddressCount": 8186,
+            "AvailabilityZone": "eu-north-1a",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": true
+        },
+        {
+            "AvailabilityZoneId": "eun1-az2",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPrivateEUNORTH1B"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "kubernetes.io/role/internal-elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPrivateEUNORTH1B"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-0cf5501aafdd54d07",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-0cf5501aafdd54d07",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.128.0/19",
+            "AvailableIpAddressCount": 8187,
+            "AvailabilityZone": "eu-north-1b",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": false
+        },
+        {
+            "AvailabilityZoneId": "eun1-az1",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPrivateEUNORTH1A"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "kubernetes.io/role/internal-elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPrivateEUNORTH1A"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-0b56a3582da13d69c",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-0b56a3582da13d69c",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.96.0/19",
+            "AvailableIpAddressCount": 8187,
+            "AvailabilityZone": "eu-north-1a",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": false
+        },
+        {
+            "AvailabilityZoneId": "eun1-az2",
+            "MapCustomerOwnedIpOnLaunch": false,
+            "OwnerId": "072929378285",
+            "AssignIpv6AddressOnCreation": false,
+            "Ipv6CidrBlockAssociationSet": [],
+            "Tags": [
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/SubnetPublicEUNORTH1B"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "kubernetes.io/role/elb",
+                    "Value": "1"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "SubnetPublicEUNORTH1B"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                }
+            ],
+            "SubnetArn": "arn:aws:ec2:eu-north-1:072929378285:subnet/subnet-0
+c6589b7016d9a9e7",
+            "EnableDns64": false,
+            "Ipv6Native": false,
+            "PrivateDnsNameOptionsOnLaunch": {
+                "HostnameType": "ip-name",
+                "EnableResourceNameDnsARecord": false,
+                "EnableResourceNameDnsAAAARecord": false
+            },
+            "BlockPublicAccessStates": {
+                "InternetGatewayBlockMode": "off"
+            },
+            "SubnetId": "subnet-0c6589b7016d9a9e7",
+            "State": "available",
+            "VpcId": "vpc-010680def416ce229",
+            "CidrBlock": "192.168.32.0/19",
+            "AvailableIpAddressCount": 8187,
+            "AvailabilityZone": "eu-north-1b",
+            "DefaultForAz": false,
+            "MapPublicIpOnLaunch": true
+        }
+    ]
+}
+```
+
+- We can execute the following command to delete the subnets:
+
+```bash
+aws ec2 delete-subnet --subnet-id subnet-06f0b07fc8b44203e  # Private EUNORTH1C
+aws ec2 delete-subnet --subnet-id subnet-0e096700420b9035a  # Public EUNORTH1C
+aws ec2 delete-subnet --subnet-id subnet-0007eb0d55b6beb0c  # Public EUNORTH1A
+aws ec2 delete-subnet --subnet-id subnet-0cf5501aafdd54d07  # Private EUNORTH1B
+aws ec2 delete-subnet --subnet-id subnet-0b56a3582da13d69c  # Private EUNORTH1A
+aws ec2 delete-subnet --subnet-id subnet-0c6589b7016d9a9e7  # Public EUNORTH1B
+```
+
+4. Security Groups
+
+```bash
+aws ec2 describe-security-groups --filters Name=vpc-id,Values=vpc-010680def416ce229
+{
+    "SecurityGroups": [
+        {
+            "GroupId": "sg-03ed4db68fd912882",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "Tags": [
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/ClusterSharedNodeSecurityGroup"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "ClusterSharedNodeSecurityGroup"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                }
+            ],
+            "VpcId": "vpc-010680def416ce229",
+            "SecurityGroupArn": "arn:aws:ec2:eu-north-1:072929378285:security-group/sg-03ed4db68fd912882",
+            "OwnerId": "072929378285",
+            "GroupName": "eksctl-jobber-cluster-ClusterSharedNodeSecurityGroup-EfYniojaVXgw",
+            "Description": "Communication between all nodes in the cluster",
+            "IpPermissions": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [
+                        {
+                            "Description": "Allow nodes to communicate with each other (all ports)",
+                            "UserId": "072929378285",
+                            "GroupId": "sg-03ed4db68fd912882"
+                        },
+                        {
+                            "Description": "Allow managed and unmanaged nodes to communicate with each other (all ports)",
+                            "UserId": "072929378285",
+                            "GroupId": "sg-00c2b7ad569e8a5c4"
+                        }
+                    ],
+                    "IpRanges": [],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ]
+        },
+        {
+            "GroupId": "sg-04c31c66910478f95",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "VpcId": "vpc-010680def416ce229",
+            "SecurityGroupArn": "arn:aws:ec2:eu-north-1:072929378285:security-group/sg-04c31c66910478f95",
+            "OwnerId": "072929378285",
+            "GroupName": "default",
+            "Description": "default VPC security group",
+            "IpPermissions": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [
+                        {
+                            "UserId": "072929378285",
+                            "GroupId": "sg-04c31c66910478f95"
+                        }
+                    ],
+                    "IpRanges": [],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ]
+        },
+        {
+            "GroupId": "sg-09272c1d81c0c3ee5",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/ControlPlaneSecurityGroup"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "ControlPlaneSecurityGroup"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                }
+            ],
+            "VpcId": "vpc-010680def416ce229",
+            "SecurityGroupArn": "arn:aws:ec2:eu-north-1:072929378285:security-group/sg-09272c1d81c0c3ee5",
+            "OwnerId": "072929378285",
+            "GroupName": "eksctl-jobber-cluster-ControlPlaneSecurityGroup-XwcnmEumt7FN",
+            "Description": "Communication between the control plane and worker nodegroups",
+            "IpPermissions": []
+        },
+        {
+            "GroupId": "sg-00c2b7ad569e8a5c4",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "Tags": [
+                {
+                    "Key": "kubernetes.io/cluster/jobber",
+                    "Value": "owned"
+                },
+                {
+                    "Key": "aws:eks:cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eks-cluster-sg-jobber-1154749518"
+                }
+            ],
+            "VpcId": "vpc-010680def416ce229",
+            "SecurityGroupArn": "arn:aws:ec2:eu-north-1:072929378285:security-group/sg-00c2b7ad569e8a5c4",
+            "OwnerId": "072929378285",
+            "GroupName": "eks-cluster-sg-jobber-1154749518",
+            "Description": "EKS created security group applied to ENI that is attached to EKS Control Plane master nodes, as well as any managed workloads.",
+            "IpPermissions": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [
+                        {
+                            "Description": "Allow unmanaged nodes to communicate with control plane (all ports)",
+                            "UserId": "072929378285",
+                            "GroupId": "sg-03ed4db68fd912882"
+                        }
+                    ],
+                    "IpRanges": [],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ]
+        }
+    ]
+}
+```
+
+- We can execute the following command to delete the security groups:
+
+```bash
+aws ec2 delete-security-group --group-id sg-03ed4db68fd912882  # ClusterSharedNodeSecurityGroup
+aws ec2 delete-security-group --group-id sg-09272c1d81c0c3ee5  # ControlPlaneSecurityGroup
+aws ec2 delete-security-group --group-id sg-00c2b7ad569e8a5c4  # eks-cluster-sg
+
+An error occurred (DependencyViolation) when calling the DeleteSecurityGroup operation: resource sg-03ed4db68fd912882 has a dependent object
+{
+    "Return": true,
+    "GroupId": "sg-09272c1d81c0c3ee5"
+}
+
+An error occurred (DependencyViolation) when calling the DeleteSecurityGroup operation: resource sg-00c2b7ad569e8a5c4 has a dependent object
+```
+
+- That means that the security group is still in use by a resource. We need to delete the resource that is using the security group.
+- We need to wait until the `nat-012137850a87da93a` NAT Gateway is deleted.
+
+```bash
+ aws ec2 describe-nat-gateways --filter Name=vpc-id,Values=vpc-010680def416ce229
+{
+    "NatGateways": [
+        {
+            "CreateTime": "2025-03-31T12:24:33+00:00",
+            "DeleteTime": "2025-04-02T08:44:51+00:00",
+            "NatGatewayAddresses": [
+                {
+                    "AllocationId": "eipalloc-028e3e43c104b85b7",
+                    "NetworkInterfaceId": "eni-0cec225a297e8dfaf",
+                    "PrivateIp": "192.168.20.146",
+                    "PublicIp": "51.20.146.176",
+                    "AssociationId": "eipassoc-04bfb61748d3a3870",
+                    "IsPrimary": true,
+                    "Status": "succeeded"
+                }
+            ],
+            "NatGatewayId": "nat-012137850a87da93a",
+            "State": "deleted",
+            "SubnetId": "subnet-0007eb0d55b6beb0c",
+            "VpcId": "vpc-010680def416ce229",
+            "Tags": [
+                {
+                    "Key": "aws:cloudformation:stack-name",
+                    "Value": "eksctl-jobber-cluster"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "aws:cloudformation:stack-id",
+                    "Value": "arn:aws:cloudformation:eu-north-1:072929378285:
+stack/eksctl-jobber-cluster/0cfff910-0e2b-11f0-b86b-06f7f7f0ec81"
+                },
+                {
+                    "Key": "eksctl.cluster.k8s.io/v1alpha1/cluster-name",
+                    "Value": "jobber"
+                },
+                {
+                    "Key": "alpha.eksctl.io/cluster-oidc-enabled",
+                    "Value": "false"
+                },
+                {
+                    "Key": "aws:cloudformation:logical-id",
+                    "Value": "NATGateway"
+                },
+                {
+                    "Key": "alpha.eksctl.io/eksctl-version",
+                    "Value": "0.206.0"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "eksctl-jobber-cluster/NATGateway"
+                }
+            ],
+            "ConnectivityType": "public"
+        }
+    ]
+}
+```
+
+- We need to remove the secuity groups first:
+
+```bash
+aws ec2 revoke-security-group-ingress --group-id sg-03ed4db68fd912882 --protocol -1 --source-group sg-03ed4db68fd912882
+aws ec2 revoke-security-group-ingress --group-id sg-03ed4db68fd912882 --protocol -1 --source-group sg-00c2b7ad569e8a5c4
+{
+    "Return": true,
+    "RevokedSecurityGroupRules": [
+        {
+            "SecurityGroupRuleId": "sgr-04350db4236aac194",
+            "GroupId": "sg-03ed4db68fd912882",
+            "IsEgress": false,
+            "IpProtocol": "-1",
+            "FromPort": -1,
+            "ToPort": -1,
+            "ReferencedGroupId": "sg-03ed4db68fd912882",
+            "Description": "Allow nodes to communicate with each other (all ports)"
+        }
+    ]
+}
+{
+    "Return": true,
+    "RevokedSecurityGroupRules": [
+        {
+            "SecurityGroupRuleId": "sgr-039078ef4d374f4fb",
+            "GroupId": "sg-03ed4db68fd912882",
+            "IsEgress": false,
+            "IpProtocol": "-1",
+            "FromPort": -1,
+            "ToPort": -1,
+            "ReferencedGroupId": "sg-00c2b7ad569e8a5c4",
+            "Description": "Allow managed and unmanaged nodes to communicate with each other (all ports)"
+        }
+    ]
+}
+```
+
+- We can try to remove the security group egress:
+
+```bash
+aws ec2 revoke-security-group-egress --group-id sg-03ed4db68fd912882 --protocol -1 --cidr 0.0.0.0/0
+{
+    "Return": true,
+    "RevokedSecurityGroupRules": [
+        {
+            "SecurityGroupRuleId": "sgr-02cb0df903ad9614b",
+            "GroupId": "sg-03ed4db68fd912882",
+            "IsEgress": true,
+            "IpProtocol": "-1",
+            "FromPort": -1,
+            "ToPort": -1,
+            "CidrIpv4": "0.0.0.0/0"
+        }
+    ]
+}
+```
+
+- We can try to remove the security group:
+
+```bash
+aws ec2 delete-security-group --group-id sg-03ed4db68fd912882  # ClusterSharedNodeSecurityGroup
+{
+    "Return": true,
+    "GroupId": "sg-03ed4db68fd912882"
+}
+```
+
+- We need to remove other sequrity groups:
+
+```bash
+aws ec2 delete-security-group --group-id sg-00c2b7ad569e8a5c4
+{
+    "Return": true,
+    "GroupId": "sg-00c2b7ad569e8a5c4"
+}
+```
+
+- We need to delete route tables:
+
+```bash
+ # Delete all route tables except the main one (rtb-07f3679153671170f)
+aws ec2 delete-route-table --route-table-id rtb-0765f831b1cc4b157
+aws ec2 delete-route-table --route-table-id rtb-0cfc91fb6dbe721cd
+aws ec2 delete-route-table --route-table-id rtb-044d3394014eaf4c1
+aws ec2 delete-route-table --route-table-id rtb-0967883054284f01b
+```
+
+- We need to delete the VPC:
+
+```bash
+aws ec2 delete-vpc --vpc-id vpc-010680def416ce229
+```
+
+> Note: It would be better to delete the cluster by using `eksctl delete cluster --name jobber --region eu-north-1`.

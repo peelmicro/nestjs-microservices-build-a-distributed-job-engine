@@ -617,7 +617,7 @@ You can now run: /usr/local/bin/aws --version
 - We can now check the version of the `AWS CLI` command line tool.
 
 ```bash
- aws --version
+aws --version
 aws-cli/2.25.6 Python/3.12.9 Linux/6.8.0-56-generic exe/x86_64.ubuntu.24
 ```
 
