@@ -5,13 +5,13 @@
 
 # @host = jobber-backend.com
 
-@url = http://jobber.peelmicro.info/auth/graphql
+@url = https://jobber.peelmicro.info/auth/graphql
 
-@host = jobber.peelmicro.info
+# @host = jobber.peelmicro.info
 ### Login
 # @name login
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
@@ -32,7 +32,7 @@ X-Full-Response: {{login.response.body.*}}
 
 ### Get all users
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -50,7 +50,7 @@ query {
 ### Get a user by email
 
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -68,7 +68,7 @@ query {
 ### Get a user by id
 
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -86,7 +86,7 @@ query {
 ### Get a user from the cookie
 
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 Cookie: {{login.response.headers.Set-Cookie}}
 X-REQUEST-TYPE: GraphQL
@@ -104,7 +104,7 @@ query {
 ### Create a user
 
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 
@@ -124,7 +124,7 @@ mutation {
 ### Update password for a user
 
 POST {{url}}
-Host: {{host}}
+# Host: {{host}}
 Content-Type: application/json
 X-REQUEST-TYPE: GraphQL
 

@@ -757,8 +757,8 @@ dig jobber.peelmicro.info
 ; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> jobber.peelmicro.info
 ;; global options: +cmd
 ;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 38915
-;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 1, ADDITIONAL: 1
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 14927
+;; flags: qr rd ra; QUERY: 1, ANSWER: 4, AUTHORITY: 0, ADDITIONAL: 1
 
 ;; OPT PSEUDOSECTION:
 ; EDNS: version: 0, flags:; udp: 65494
@@ -766,24 +766,73 @@ dig jobber.peelmicro.info
 ;jobber.peelmicro.info.         IN      A
 
 ;; ANSWER SECTION:
-jobber.peelmicro.info.  14400   IN      CNAME   k8s-myingressgroup-9cf944356d-574987922.eu-north-1.elb.amazonaws.com.
+jobber.peelmicro.info.  14400   IN      CNAME   k8s-myingressgroup-9cf944356d-356065777.eu-north-1.elb.amazonaws.com.
+k8s-myingressgroup-9cf944356d-356065777.eu-north-1.elb.amazonaws.com. 60 IN A 51.21.40.225
+k8s-myingressgroup-9cf944356d-356065777.eu-north-1.elb.amazonaws.com. 60 IN A 13.48.218.165
+k8s-myingressgroup-9cf944356d-356065777.eu-north-1.elb.amazonaws.com. 60 IN A 13.50.254.21
 
-;; AUTHORITY SECTION:
-eu-north-1.elb.amazonaws.com. 60 IN     SOA     ns-1529.awsdns-63.org. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 60
-
-;; Query time: 159 msec
+;; Query time: 164 msec
 ;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
-;; WHEN: Tue Apr 01 18:32:40 CEST 2025
-;; MSG SIZE  rcvd: 214
+;; WHEN: Wed Apr 02 08:56:00 CEST 2025
+;; MSG SIZE  rcvd: 180
 ```
 
 - We can also check it using `curl`:
 
 ```bash
 curl -v https://jobber.peelmicro.info/auth/graphql
-* Could not resolve host: jobber.peelmicro.info
-* Closing connection
-curl: (6) Could not resolve host: jobber.peelmicro.info
+* Host jobber.peelmicro.info:443 was resolved.
+* IPv6: (none)
+* IPv4: 13.48.218.165, 51.21.40.225, 13.50.254.21
+*   Trying 13.48.218.165:443...
+* Connected to jobber.peelmicro.info (13.48.218.165) port 443
+* ALPN: curl offers h2,http/1.1
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+*  CAfile: /etc/ssl/certs/ca-certificates.crt
+*  CApath: /etc/ssl/certs
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.2 (IN), TLS handshake, Certificate (11):
+* TLSv1.2 (IN), TLS handshake, Server key exchange (12):
+* TLSv1.2 (IN), TLS handshake, Server finished (14):
+* TLSv1.2 (OUT), TLS handshake, Client key exchange (16):
+* TLSv1.2 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (OUT), TLS handshake, Finished (20):
+* TLSv1.2 (IN), TLS handshake, Finished (20):
+* SSL connection using TLSv1.2 / ECDHE-RSA-AES128-GCM-SHA256 / prime256v1 / rsaEncryption
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=jobber.peelmicro.info
+*  start date: Apr  1 00:00:00 2025 GMT
+*  expire date: Apr 30 23:59:59 2026 GMT
+*  subjectAltName: host "jobber.peelmicro.info" matched cert's "jobber.peelmicro.info"
+*  issuer: C=US; O=Amazon; CN=Amazon RSA 2048 M03
+*  SSL certificate verify ok.
+*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+*   Certificate level 2: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://jobber.peelmicro.info/auth/graphql
+* [HTTP/2] [1] [:method: GET]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: jobber.peelmicro.info]
+* [HTTP/2] [1] [:path: /auth/graphql]
+* [HTTP/2] [1] [user-agent: curl/8.5.0]
+* [HTTP/2] [1] [accept: */*]
+> GET /auth/graphql HTTP/2
+> Host: jobber.peelmicro.info
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/2 400
+< date: Wed, 02 Apr 2025 06:58:20 GMT
+< content-type: application/json; charset=utf-8
+< content-length: 148
+< x-powered-by: Express
+< cache-control: no-store
+< etag: W/"94-npaMbIB5erTaplHAdDd5m/mgtR8"
+<
+{"errors":[{"message":"GraphQL operations must contain a non-empty `query` or a `persistedQuery` extension.","extensions":{"code":"BAD_REQUEST"}}]}
+* Connection #0 to host jobber.peelmicro.info left intact
 ```
 
 - We can also add `+trace` to the `dig` command to get more information:
@@ -793,20 +842,20 @@ dig jobber.peelmicro.info +trace
 
 ; <<>> DiG 9.18.30-0ubuntu0.24.04.2-Ubuntu <<>> jobber.peelmicro.info +trace
 ;; global options: +cmd
-.                       56339   IN      NS      m.root-servers.net.
-.                       56339   IN      NS      a.root-servers.net.
-.                       56339   IN      NS      b.root-servers.net.
-.                       56339   IN      NS      c.root-servers.net.
-.                       56339   IN      NS      d.root-servers.net.
-.                       56339   IN      NS      e.root-servers.net.
-.                       56339   IN      NS      f.root-servers.net.
-.                       56339   IN      NS      g.root-servers.net.
-.                       56339   IN      NS      h.root-servers.net.
-.                       56339   IN      NS      i.root-servers.net.
-.                       56339   IN      NS      j.root-servers.net.
-.                       56339   IN      NS      k.root-servers.net.
-.                       56339   IN      NS      l.root-servers.net.
-;; Received 811 bytes from 127.0.0.53#53(127.0.0.53) in 10 ms
+.                       6155    IN      NS      c.root-servers.net.
+.                       6155    IN      NS      l.root-servers.net.
+.                       6155    IN      NS      b.root-servers.net.
+.                       6155    IN      NS      f.root-servers.net.
+.                       6155    IN      NS      i.root-servers.net.
+.                       6155    IN      NS      d.root-servers.net.
+.                       6155    IN      NS      j.root-servers.net.
+.                       6155    IN      NS      h.root-servers.net.
+.                       6155    IN      NS      m.root-servers.net.
+.                       6155    IN      NS      g.root-servers.net.
+.                       6155    IN      NS      a.root-servers.net.
+.                       6155    IN      NS      e.root-servers.net.
+.                       6155    IN      NS      k.root-servers.net.
+;; Received 811 bytes from 127.0.0.53#53(127.0.0.53) in 1 ms
 
 info.                   172800  IN      NS      a0.info.afilias-nst.info.
 info.                   172800  IN      NS      a2.info.afilias-nst.info.
@@ -815,24 +864,21 @@ info.                   172800  IN      NS      b2.info.afilias-nst.org.
 info.                   172800  IN      NS      c0.info.afilias-nst.info.
 info.                   172800  IN      NS      d0.info.afilias-nst.org.
 info.                   86400   IN      DS      5104 8 2 1AF7548A8D3E2950C20303757DF9390C26CFA39E26C8B6A8F6C8B1E7 2DD8F744
-info.                   86400   IN      RRSIG   DS 8 1 86400 20250414050000 20250401040000 53148 . VlmmrIaERl6uxcFc/K2mkGa+F4K6v6zrYHrkRMUKVrYbSd3jEVCHux6A clpCjdikEKhbnuXIMca10bKbeuUfcFqM0PF3Pu1oRI7UWD+jtEXjRmTR Bi+tIZCxQ7+W2tm6liq9WD7Zbl5+grCBtLBjfBLS2uhorviAbm1SFeQb B1E4y/NcPSEwWQkCZs7+3KfXpEtRqupyNE/2ruUx/RhosgJo+D0YqpcA j3x+FtVC4pTZAGvedtLLCB/MF3ObuYb/B2khyNBO1mwPbNlVzAelQXbM mr7VgVNPaF8w+IMQNowLKcQXCmI+krYrPyHguE80SE2scYCKPyItP5lv zZAiSg==
-;; Received 788 bytes from 199.7.91.13#53(d.root-servers.net) in 37 ms
+info.                   86400   IN      RRSIG   DS 8 1 86400 20250415050000 20250402040000 53148 . G2QVfBl/pOocBwnvXtyX1atkaoN/BkmBRhwePdmTbSsE6oj5NDwc6GsZ gJPQb5cpPs7N5atr60eMx9diuQs+FvWj68syDCM+fGd1HB6les6FB0q1 J5xBJt1rlGCAcf0oePjTW0GpIujO2XlIOn5zMATy4PtP60F62HlYLNky cgFhepzz4DyG2zPK8Z3Vt1EIlb0dJITFpkhd007UeDEz+2mHTQQWn4D+ Oakc+1n2DL1vXa47p2Ay27DzFyfv8qoefy7FNS5nX2Z1PU36jWxLkYK+ +djNIMlCwX2W1nHRK2ltdf1BklzcrHPQeQ/9nJFv/qi+GhUfV85QIRQI iYWbuQ==
+;; Received 829 bytes from 199.7.83.42#53(l.root-servers.net) in 14 ms
 
-;; communications error to 2001:500:41::1#53: timed out
-;; communications error to 2001:500:41::1#53: timed out
-;; communications error to 2001:500:41::1#53: timed out
-peelmicro.info.         3600    IN      NS      ns-cloud-d1.googledomains.com.
 peelmicro.info.         3600    IN      NS      ns-cloud-d2.googledomains.com.
-peelmicro.info.         3600    IN      NS      ns-cloud-d3.googledomains.com.
+peelmicro.info.         3600    IN      NS      ns-cloud-d1.googledomains.com.
 peelmicro.info.         3600    IN      NS      ns-cloud-d4.googledomains.com.
+peelmicro.info.         3600    IN      NS      ns-cloud-d3.googledomains.com.
 nts9719ejeced08jegq9ombmafneqsd7.info. 3600 IN NSEC3 1 1 0 73 NTSGCQ8BFTQMNBICKSE3JQEV1V3UTMRU NS SOA RRSIG DNSKEY NSEC3PARAM
+nts9719ejeced08jegq9ombmafneqsd7.info. 3600 IN RRSIG NSEC3 8 2 3600 20250423065359 20250402055359 22704 info. thEgvbEDZUEUpD47nzVCK4NTtVl4Ug7k2AN1xB4SbZioeB6ZmZHE6anB Efju22MEvXHOMqrf4lI8lNgN9y6hHWBYTii33R1+dEi3Ylib/F6qn1h9 aiLFn6lMvSbfenbQMXdfUWdB8MNEqGN1SSiBWH+3HZX2fKNh9xihXEZ4 q1Q=
 0njk896ieo5jceq4c0rktvc1k1a70uh5.info. 3600 IN NSEC3 1 1 0 73 0NJPEUH04UJOC0U5AUDQORDOQNLUCRLG NS DS RRSIG
-nts9719ejeced08jegq9ombmafneqsd7.info. 3600 IN RRSIG NSEC3 8 2 3600 20250422162851 20250401152851 22704 info. shbDW1YFU/0Jbt9AvzmMsgTtDsMNqz6GMYGbqljaVnLUGZF5at/RqoUi Fiyx3MSDqN8NfkJ+cTaQtkBiHBMkJYieWs3PoW7QPVCg5qlEXJNysm+c bumxRpt4zhPgMXPfQBZfhBWnvQKjj4npSyrOlaBW+iB+OeQBbGM+ZXq5 RQI=
 0njk896ieo5jceq4c0rktvc1k1a70uh5.info. 3600 IN RRSIG NSEC3 8 2 3600 20250422153947 20250401143947 22704 info. yfN+hiGTzN0sx6i4Tu//pakzgzwimwT9P6f6KZiKhWQTSWjDKjIYIIb2 Jr0wLIdBZzFUsTBrtPHVV5l4XLP05Lvfcy9IjgoTQA6gy5bQWG+j7XQi Vd5N9shVAo11s+nqModXXY0jKNcfgJuH8lypq4ROzc0aq4uvjw1e62m/ Jbs=
-;; Received 660 bytes from 199.249.113.1#53(a2.info.afilias-nst.info) in 34 ms
+;; Received 660 bytes from 199.249.113.1#53(a2.info.afilias-nst.info) in 37 ms
 
-jobber.peelmicro.info.  14400   IN      CNAME   k8s-myingressgroup-9cf944356d-574987922.eu-north-1.elb.amazonaws.com.
-;; Received 165 bytes from 216.239.32.109#53(ns-cloud-d1.googledomains.com) in 33 ms
+jobber.peelmicro.info.  14400   IN      CNAME   k8s-myingressgroup-9cf944356d-356065777.eu-north-1.elb.amazonaws.com.
+;; Received 165 bytes from 216.239.32.109#53(ns-cloud-d1.googledomains.com) in 35 ms
 ```
 
 #### 14.10.4 Updating the `values.yaml`, `values-aws.yaml` and `auth/deployment.yaml` files to include the `SECURE_COOKIE` variable
